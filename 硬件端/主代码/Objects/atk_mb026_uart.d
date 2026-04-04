@@ -31,6 +31,7 @@
 .\objects\atk_mb026_uart.o: .\Library\misc.h
 .\objects\atk_mb026_uart.o: .\System\delay.h
 .\objects\atk_mb026_uart.o: .\System\sys.h
+.\objects\atk_mb026_uart.o: Hardware\RS485.h
 .\objects\atk_mb026_uart.o: D:\Program Files\ARM\ARMCC\Bin\..\include\stdarg.h
 .\objects\atk_mb026_uart.o: D:\Program Files\ARM\ARMCC\Bin\..\include\stdio.h
 .\objects\atk_mb026_uart.o: D:\Program Files\ARM\ARMCC\Bin\..\include\string.h

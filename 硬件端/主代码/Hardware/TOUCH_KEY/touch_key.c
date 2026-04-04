@@ -2,6 +2,8 @@
 #include "../System/Delay.h"
 #include "../Hardware/RELAY/relay.h"
 #include "../Hardware/OLED.h"
+#include "../Hardware/RS485.h"
+#include "../Hardware/SoilSensor.h"
 #include <stdio.h>
 
 // 触摸按键状态变量
@@ -24,19 +26,24 @@ void TOUCH_KEY_EXTI_Init(void){
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_AFIO, ENABLE);
 
 	// 配置GPIO为输入模式
-	GPIO_InitStructure.GPIO_Pin = TOUCH_KEY_C | TOUCH_KEY_D;
+	GPIO_InitStructure.GPIO_Pin = TOUCH_KEY_A | TOUCH_KEY_C | TOUCH_KEY_D;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
 	GPIO_Init(TOUCH_KEYPORT, &GPIO_InitStructure);
 
 	// 配置EXTI线路
+	GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource0); // A键
 	GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource2); // C键
 	GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource3); // D键
 
-	// 配置EXTI2（C键）
-	EXTI_InitStructure.EXTI_Line = EXTI_Line2;
+	// 配置EXTI0（A键）
+	EXTI_InitStructure.EXTI_Line = EXTI_Line0;
 	EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
 	EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Falling; // 下降沿触发
 	EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+	EXTI_Init(&EXTI_InitStructure);
+
+	// 配置EXTI2（C键）
+	EXTI_InitStructure.EXTI_Line = EXTI_Line2;
 	EXTI_Init(&EXTI_InitStructure);
 
 	// 配置EXTI3（D键）
@@ -44,10 +51,15 @@ void TOUCH_KEY_EXTI_Init(void){
 	EXTI_Init(&EXTI_InitStructure);
 
 	// 配置NVIC
+	NVIC_InitStructure.NVIC_IRQChannel = EXTI0_IRQn;
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01; // 更高优先级
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
+	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_Init(&NVIC_InitStructure);
+
 	NVIC_InitStructure.NVIC_IRQChannel = EXTI2_IRQn;
 	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x02;
 	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x02;
-	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
 	NVIC_Init(&NVIC_InitStructure);
 
 	NVIC_InitStructure.NVIC_IRQChannel = EXTI3_IRQn;
@@ -60,6 +72,20 @@ void TOUCH_KEY_EXTI_Init(void){
 // 返回值：0-无按键，1-A，2-B，3-C，4-D
 uint8_t TOUCH_KEY_Scan(void)
 {
+    if (GPIO_ReadInputDataBit(TOUCH_KEYPORT, TOUCH_KEY_A) == 0) {
+        delay_ms(10); // 消抖
+        if (GPIO_ReadInputDataBit(TOUCH_KEYPORT, TOUCH_KEY_A) == 0) {
+            while (GPIO_ReadInputDataBit(TOUCH_KEYPORT, TOUCH_KEY_A) == 0); // 等待释放
+            return 1; // A键
+        }
+    }
+    if (GPIO_ReadInputDataBit(TOUCH_KEYPORT, TOUCH_KEY_B) == 0) {
+        delay_ms(10); // 消抖
+        if (GPIO_ReadInputDataBit(TOUCH_KEYPORT, TOUCH_KEY_B) == 0) {
+            while (GPIO_ReadInputDataBit(TOUCH_KEYPORT, TOUCH_KEY_B) == 0); // 等待释放
+            return 2; // B键
+        }
+    }
     if (GPIO_ReadInputDataBit(TOUCH_KEYPORT, TOUCH_KEY_C) == 0) {
         delay_ms(10); // 消抖
         if (GPIO_ReadInputDataBit(TOUCH_KEYPORT, TOUCH_KEY_C) == 0) {
@@ -116,5 +142,32 @@ void EXTI3_IRQHandler(void)
 		}
 		// 清除中断标志位
 		EXTI_ClearITPendingBit(EXTI_Line3);
+	}
+}
+
+// EXTI0中断处理函数（A键）
+void EXTI0_IRQHandler(void)
+{
+	if (EXTI_GetITStatus(EXTI_Line0) != RESET) {
+		// 消抖
+		delay_ms(10);
+		if (GPIO_ReadInputDataBit(TOUCH_KEYPORT, TOUCH_KEY_A) == 0) {
+			printf("[Touch Key] 中断：A键被按下\r\n");
+			// 直接发送土壤传感器请求数据（HEX格式）
+			// 土壤传感器请求数据：01 03 00 01 03 00 3D CC
+			uint8_t soil_request[] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x04, 0x44, 0x09};
+			RS485_SendHex(soil_request, 8);
+			printf("[System] 触摸按键A按下，发送土壤传感器请求\r\n");
+			OLED_ShowString(1, 1, "  RS485");
+			OLED_ShowString(2, 1, "  Send");
+			OLED_ShowString(3, 1, "  Request");
+			OLED_ShowString(4, 1, "  Success");
+			
+			// 延时等待响应，然后解析数据
+			delay_ms(500); // 等待传感器响应
+			SoilSensor_PrintReceivedData();
+		}
+		// 清除中断标志位
+		EXTI_ClearITPendingBit(EXTI_Line0);
 	}
 }

@@ -9,6 +9,9 @@
 #include "demo.h"
 #include "../Hardware/RELAY/relay.h"
 #include "../Hardware/TOUCH_KEY/touch_key.h"
+#include "../Hardware/Serial2.h"
+#include "../Hardware/RS485.h"
+#include "../Hardware/SoilSensor.h"
 #include <stdio.h>
 
 // 全局变量
@@ -403,13 +406,15 @@ int main(void)
 	// 初始化系统
 	delay_init(72);              // 初始化延时函数
 	usart_init(115200);          // 初始化串口
+	RS485_Init();                // 初始化RS485（包含USART3初始化）
 	OLED_Init();                 // 初始化OLED
 	LED_Init();                  // 初始化LED
 	RELAY_Init();                // 初始化继电器
 	TOUCH_KEY_Init();            // 初始化触摸按键
 	TOUCH_KEY_EXTI_Init();       // 初始化触摸按键外部中断
 	
-	// 初始化WiFi模块
+	// 初始化WiFi模块（暂时注释，避免与RS485引脚冲突）
+	/*
 	if (init_wifi_module()) {
 		// 连接WiFi
 		if (connect_wifi()) {
@@ -423,6 +428,7 @@ int main(void)
 			test_server_health();
 		}
 	}
+	*/
 	
 	// 主循环
 	while (1)
@@ -447,9 +453,48 @@ int main(void)
 			OLED_ShowString(2, 1, "  OFF");
 			OLED_ShowString(3, 1, "  Water Pump");
 			OLED_ShowString(4, 1, "  Stopped");
+		} else if (key == 1) { // 触摸按键A
+			// 直接发送土壤传感器请求数据（HEX格式）
+			// 土壤传感器请求数据：01 03 00 01 03 00 3D CC
+			RS485_printf("\x01\x03\x00\x01\x03\x00\x3D\xCC");
+			printf("[System] 触摸按键A按下，发送土壤传感器请求\r\n");
+			OLED_ShowString(1, 1, "  RS485");
+			OLED_ShowString(2, 1, "  Send");
+			OLED_ShowString(3, 1, "  Request");
+			OLED_ShowString(4, 1, "  Success");
 		}
 		
-		// 每10秒检查一次WiFi连接状态
+		// 每2秒读取一次土壤传感器数据
+		if (timecount % 2000 == 0) {
+			float moisture;
+			float temperature;
+			uint16_t ec;
+			float ph;
+			uint8_t result = SoilSensor_ReadData(&moisture, &temperature, &ec, &ph);
+			
+			if (result == 0) {
+				printf("[Soil Sensor] 含水率: %.1f%%, 温度: %.1f℃, 电导率: %d us/cm, PH: %.1f\r\n", 
+					moisture, temperature, ec, ph);
+				OLED_ShowString(1, 1, "  Soil Sensor");
+				OLED_ShowString(2, 1, "  Read OK");
+				char data_str[16];
+				sprintf(data_str, "  M:%.0f%% T:%.0fC", moisture, temperature);
+				OLED_ShowString(3, 1, data_str);
+				sprintf(data_str, "  EC:%d PH:%.1f", ec, ph);
+				OLED_ShowString(4, 1, data_str);
+			} else {
+				printf("[Soil Sensor] 读取失败，错误码: %d\r\n", result);
+				OLED_ShowString(1, 1, "  Soil Sensor");
+				OLED_ShowString(2, 1, "  Read Failed");
+				OLED_ShowString(3, 1, "  Error Code:");
+				char error_str[10];
+				sprintf(error_str, "  %d", result);
+				OLED_ShowString(4, 1, error_str);
+			}
+		}
+		
+		// 每10秒检查一次WiFi连接状态（暂时注释，避免与RS485引脚冲突）
+		/*
 		if (timecount % WIFI_CHECK_INTERVAL == 0) {
 			uint8_t status = check_wifi_status();
 			if (status && !g_wifi_connected) {
@@ -478,10 +523,11 @@ int main(void)
 			}
 		}
 		
-		// 每30秒测试一次百度连接
+		// 每30秒测试一次百度连接（暂时注释，避免与RS485引脚冲突）
 		if (timecount % BAIDU_PING_INTERVAL == 0 && g_wifi_connected) {
 			test_baidu_connectivity();
 		}
+		*/
 		
 		delay_ms(1);
 	}

@@ -893,6 +893,36 @@
               <FileType>1</FileType>
               <FilePath>.\Hardware\TOUCH_KEY\touch_key.c</FilePath>
             </File>
+            <File>
+              <FileName>Serial2.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Hardware\Serial2.c</FilePath>
+            </File>
+            <File>
+              <FileName>Serial2.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Hardware\Serial2.h</FilePath>
+            </File>
+            <File>
+              <FileName>RS485.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Hardware\RS485.c</FilePath>
+            </File>
+            <File>
+              <FileName>RS485.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Hardware\RS485.h</FilePath>
+            </File>
+            <File>
+              <FileName>SoilSensor.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Hardware\SoilSensor.c</FilePath>
+            </File>
+            <File>
+              <FileName>SoilSensor.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Hardware\SoilSensor.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

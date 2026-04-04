@@ -20,6 +20,7 @@
 
 #include "atk_mb026_uart.h"
 #include "delay.h"
+#include "RS485.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -166,29 +167,23 @@ void atk_mb026_uart_init(uint32_t baudrate)
     // 6. ��USART3
     USART_Cmd(ATK_MB026_UART_INTERFACE, ENABLE);
     
-    // 7. ���ޅf���TIM2���r���x�A����ϼ
-    TIM_TimeBaseStructure.TIM_Period = 100 - 1;
-    TIM_TimeBaseStructure.TIM_Prescaler = ATK_MB026_TIM_PRESCALER - 1;
+    // 7. 配置TIM2定时器，用于UART接收超时检测
+    // 增加超时时间到200ms（原来约83ms）
+    TIM_TimeBaseStructure.TIM_Period = 240 - 1;  // 240 * (1/1200) = 200ms
+    TIM_TimeBaseStructure.TIM_Prescaler = ATK_MB026_TIM_PRESCALER - 1;  // 72MHz/60000 = 1200Hz
     TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
     TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
     TIM_TimeBaseInit(ATK_MB026_TIM_INTERFACE, &TIM_TimeBaseStructure);
     
-    // 8. ����TIM2��H
+    // 8. 配置TIM2中断
     NVIC_InitStructure.NVIC_IRQChannel = ATK_MB026_TIM_IRQn;
     NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
     NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
     NVIC_Init(&NVIC_InitStructure);
     TIM_ITConfig(ATK_MB026_TIM_INTERFACE, TIM_IT_Update, ENABLE);
     
-		TIM_OCInitTypeDef TIM_OCInitStructure;
-		TIM_OCStructInit(&TIM_OCInitStructure);
-		TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
-		TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
-		TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
-		TIM_OCInitStructure.TIM_Pulse = 0;		//CCR
-		TIM_OC1Init(TIM2, &TIM_OCInitStructure);
-		
-		TIM_Cmd(TIM2, ENABLE);
+    // 注意：不要在初始化时启用TIM2，应该在接收到第一个字节时再启用
+    // TIM_Cmd(TIM2, ENABLE);  // 移除此行
 
 		
 		
@@ -215,29 +210,47 @@ void USART3_IRQHandler(void)
         (void)USART_ReceiveData(USART3); // ��ȡDR�Ĵ�����������־
     }
     
-    /* 2. ���������ж� */
+    /* 2. 处理接收中断 */
     if (USART_GetITStatus(USART3, USART_IT_RXNE) != RESET)
     {
         tmp = USART_ReceiveData(USART3);
         
-        /* ��黺�����ռ� */
+        // 调试：打印接收到的字节
+        printf("%02X ", tmp);
+        
+        // Modbus RTU协议：通过超时判断帧结束
+        // 存储到接收缓冲区
+        if ((USART3_RX_STA & 0x8000) == 0)  // 接收未完成
+        {
+            // 存储数据
+            USART3_RX_BUF[USART3_RX_STA & 0x3FFF] = tmp;
+            USART3_RX_STA++;
+            
+            // 检查缓冲区溢出
+            if (USART3_RX_STA > (USART3_REC_LEN - 1))
+            {
+                USART3_RX_STA = 0;  // 缓冲区溢出，重新开始
+            }
+        }
+        
+        /* 处理接收缓冲区 */
         if (g_sta.len < (ATK_MB026_UART_RX_BUF_SIZE - 1))
         {
-            TIM_SetCounter(TIM2, 0); // ���ó�ʱ��ʱ��
+            TIM_SetCounter(TIM2, 0); // 重置定时器计数
             
-            /* ����ǵ�һ���ֽڣ�������ʱ��ʱ�� */
+            /* 如果是第一个字节，开启定时器 */
             if (g_sta.len == 0)
             {
                 TIM_Cmd(TIM2, ENABLE);
             }
             
-            /* �洢���յ����ֽ� */
+            /* 存储接收到的字节 */
             g_uart_rx_frame[g_sta.len] = tmp;
             g_sta.len++;
         }
         else
         {
-            /* ������������� */
+            /* 接收缓冲区满 */
             g_sta.len = 0;
             g_uart_rx_frame[g_sta.len] = tmp;
             g_sta.len++;
@@ -269,22 +282,31 @@ void TIM2_IRQHandler(void)
 {
     if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET)
     {
-        /* ����жϱ�־ */
+        /* 清除中断标志 */
         TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
         
-        /* ���ö�ʱ�� */
+        /* 关闭定时器 */
         TIM_Cmd(TIM2, DISABLE);
         
-        /* ����֡������ɱ�־ */
+        /* 设置帧接收完成标志 */
         g_sta.finsh = 1;
         
-        /* ��ѡ�����������������ϱ� */
-        static uint8_t report_counter = 0;
-        report_counter++;
-        if (report_counter >= 40) {
-            report_counter = 0;
-            // �������������ϱ��߼�
+        /* Modbus RTU协议：超时表示帧结束，设置接收完成标志 */
+        // 如果有接收到数据，设置完成标志
+        uint16_t rx_len = USART3_RX_STA & 0x3FFF;
+        if (rx_len > 0)
+        {
+            USART3_RX_STA |= 0x8000;  // 设置接收完成标志
+            printf("\r\n[TIM2] 超时触发，设置接收完成标志，len=%d\r\n", rx_len);
         }
+        else
+        {
+            printf("\r\n[TIM2] 超时触发，但没有接收到数据\r\n");
+        }
+        
+        /* 处理485接收到的数据 */
+        extern void Serial2_ProcessResponse(void);
+        Serial2_ProcessResponse();
     }
 }
 
