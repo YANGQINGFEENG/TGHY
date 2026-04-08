@@ -7,15 +7,17 @@ char Serial2_RxPacket[100];
 uint8_t Serial2_RxFlag;
 
 /**
- * @brief 初始化USART3，用于RS485通信
+ * @brief 初始化串口2（复用WiFi模块的USART2，仅用于发送）
  * @param 无
  * @retval 无
+ * @note 注意：此函数不再调用atk_mb026_uart_init，避免覆盖WiFi模块的波特率配置
  */
 void Serial2_Init(void)
 {
-	// 使用现有的USART3初始化（由WiFi模块初始化）
-	// 只需确保波特率设置为9600
-	atk_mb026_uart_init(9600);
+	/* WiFi模块已通过atk_mb026_uart_init(115200)初始化了USART2
+	 * 此处不需要重复初始化，只需确保使用正确的波特率即可
+	 * 如果需要独立的RS485通信，应使用USART3(PB10/PB11)
+	 */
 }
 
 /**

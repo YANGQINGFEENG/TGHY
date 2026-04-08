@@ -25,24 +25,24 @@
 #include "delay.h"
 
 /* ���Ŷ��� */
-#define ATK_MB026_UART_TX_GPIO_PORT           GPIOA
-#define ATK_MB026_UART_TX_GPIO_PIN            GPIO_Pin_2
-#define ATK_MB026_UART_TX_GPIO_CLK            RCC_APB2Periph_GPIOA
+#define ATK_MB026_UART_TX_GPIO_PORT           GPIOB
+#define ATK_MB026_UART_TX_GPIO_PIN            GPIO_Pin_10
+#define ATK_MB026_UART_TX_GPIO_CLK            RCC_APB2Periph_GPIOB
 
-#define ATK_MB026_UART_RX_GPIO_PORT           GPIOA
-#define ATK_MB026_UART_RX_GPIO_PIN            GPIO_Pin_3
-#define ATK_MB026_UART_RX_GPIO_CLK            RCC_APB2Periph_GPIOA
+#define ATK_MB026_UART_RX_GPIO_PORT           GPIOB
+#define ATK_MB026_UART_RX_GPIO_PIN            GPIO_Pin_11
+#define ATK_MB026_UART_RX_GPIO_CLK            RCC_APB2Periph_GPIOB
 
-#define ATK_MB026_TIM_INTERFACE               TIM3
-#define ATK_MB026_TIM_IRQn                    TIM3_IRQn
-#define ATK_MB026_TIM_IRQHandler              TIM3_IRQHandler
-#define ATK_MB026_TIM_CLK_ENABLE()            RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE)
+#define ATK_MB026_TIM_INTERFACE               TIM2
+#define ATK_MB026_TIM_IRQn                    TIM2_IRQn
+#define ATK_MB026_TIM_IRQHandler              TIM2_IRQHandler
+#define ATK_MB026_TIM_CLK_ENABLE()            RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE)
 #define ATK_MB026_TIM_PRESCALER               60000
 
-#define ATK_MB026_UART_INTERFACE              USART2
-#define ATK_MB026_UART_IRQn                   USART2_IRQn
-#define ATK_MB026_UART_IRQHandler             USART2_IRQHandler
-#define ATK_MB026_UART_CLK_ENABLE()           RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE)
+#define ATK_MB026_UART_INTERFACE              USART3
+#define ATK_MB026_UART_IRQn                   USART3_IRQn
+#define ATK_MB026_UART_IRQHandler             USART3_IRQHandler
+#define ATK_MB026_UART_CLK_ENABLE()           RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART3, ENABLE)
 
 /* UART�շ������С */
 #define ATK_MB026_UART_RX_BUF_SIZE            256

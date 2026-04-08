@@ -215,8 +215,7 @@ void USART2_IRQHandler(void)
     {
         tmp = USART_ReceiveData(USART2);
         
-        // 调试：打印接收到的字节
-        printf("%02X ", tmp);
+        /* 注意：不要在中断中调用printf，会导致通过USART1发送时阻塞等待，引发死锁 */
         
         /* 处理接收缓冲区 */
         if (g_sta.len < (ATK_MB026_UART_RX_BUF_SIZE - 1))
