@@ -12,6 +12,7 @@
 #include "../Hardware/Serial2.h"
 #include "../Hardware/RS485.h"
 #include "../Hardware/SoilSensor.h"
+#include "../Hardware/atk_d43.h"
 #include <stdio.h>
 
 // 全局变量
@@ -405,13 +406,72 @@ int main(void)
 {
 	// 初始化系统
 	delay_init(72);              // 初始化延时函数
-	usart_init(115200);          // 初始化串口
+	usart_init(115200);          // 初始化串口（用于ATK-D43通信）
 	RS485_Init();                // 初始化RS485（包含USART3初始化）
 	OLED_Init();                 // 初始化OLED
 	LED_Init();                  // 初始化LED
 	RELAY_Init();                // 初始化继电器
 	TOUCH_KEY_Init();            // 初始化触摸按键
 	TOUCH_KEY_EXTI_Init();       // 初始化触摸按键外部中断
+	
+	// 初始化ATK-D43模块
+	printf("[System] 初始化ATK-D43模块...\r\n");
+	OLED_ShowString(1, 1, "  System Init");
+	OLED_ShowString(2, 1, "  ATK-D43");
+	
+	// 等待DTU启动
+	printf("[System] 等待ATK-D43启动，等待10秒...\r\n");
+	OLED_ShowString(3, 1, "  Waiting 10s");
+	for(int i = 0; i < 10; i++) {
+		printf("[System] 等待 %d/10 秒...\r\n", i+1);
+		delay_ms(1000);
+	}
+	
+	// 配置DTU参数
+	int dtu_init_result = dtu_config_init(DTU_WORKMODE_MQTT, DTU_COLLECT_OFF);
+	if (dtu_init_result == 0) {
+		printf("[System] ATK-D43配置成功\r\n");
+		OLED_ShowString(2, 1, "  Config: OK");
+		
+		// 重置DTU设备
+		printf("[System] 重置ATK-D43设备...\r\n");
+		OLED_ShowString(3, 1, "  Resetting");
+		int reset_result = dtu_power_reset();
+		if (reset_result == 0) {
+			printf("[System] ATK-D43重置成功\r\n");
+			OLED_ShowString(3, 1, "  Reset: OK");
+			
+			// 等待DTU重启
+			printf("[System] 等待ATK-D43重启，等待5秒...\r\n");
+			OLED_ShowString(4, 1, "  Waiting 5s");
+			for(int i = 0; i < 5; i++) {
+				printf("[System] 等待 %d/5 秒...\r\n", i+1);
+				delay_ms(1000);
+			}
+			
+			// 验证通信
+			printf("[System] 验证ATK-D43通信...\r\n");
+			OLED_ShowString(4, 1, "  Testing");
+			USART_SendString(USART1, "AT\r\n");
+			delay_ms(1000);
+			if (g_usart_rx_sta & 0x8000) {
+				printf("[System] 收到模块响应: %s\r\n", g_usart_rx_buf);
+				OLED_ShowString(4, 1, "  Test: OK");
+			} else {
+				printf("[System] 未收到模块响应\r\n");
+				OLED_ShowString(4, 1, "  Test: No");
+			}
+			// 清空接收缓冲区
+			g_usart_rx_sta = 0;
+		} else {
+			printf("[System] ATK-D43重置失败，错误码: %d\r\n", reset_result);
+			OLED_ShowString(3, 1, "  Reset: Failed");
+		}
+	} else {
+		printf("[System] ATK-D43初始化失败，错误码: %d\r\n", dtu_init_result);
+		OLED_ShowString(2, 1, "  Init: Failed");
+	}
+	delay_ms(1000);
 	
 	// 初始化WiFi模块（暂时注释，避免与RS485引脚冲突）
 	/*
@@ -464,7 +524,21 @@ int main(void)
 			OLED_ShowString(4, 1, "  Success");
 		}
 		
-		// 每2秒读取一次土壤传感器数据
+		// 处理串口数据转发
+		if (g_usart_rx_sta & 0x8000) {
+			// 有数据从串口1接收
+			uint16_t len = g_usart_rx_sta & 0x3fff;
+			printf("[System] 收到串口数据: %s\r\n", g_usart_rx_buf);
+			
+			// 转发数据到ATK-D43模块
+			send_data_to_dtu((uint8_t *)g_usart_rx_buf, len);
+			printf("[System] 数据已转发到4G模块\r\n");
+			
+			// 清空接收缓冲区
+			g_usart_rx_sta = 0;
+		}
+		
+		// 每2秒读取一次土壤传感器数据（只保留数据流，不打印具体值）
 		if (timecount % 2000 == 0) {
 			float moisture;
 			float temperature;
@@ -472,25 +546,37 @@ int main(void)
 			float ph;
 			uint8_t result = SoilSensor_ReadData(&moisture, &temperature, &ec, &ph);
 			
+			// 只打印读取状态，不打印具体数值
 			if (result == 0) {
-				printf("[Soil Sensor] 含水率: %.1f%%, 温度: %.1f℃, 电导率: %d us/cm, PH: %.1f\r\n", 
-					moisture, temperature, ec, ph);
-				OLED_ShowString(1, 1, "  Soil Sensor");
-				OLED_ShowString(2, 1, "  Read OK");
-				char data_str[16];
-				sprintf(data_str, "  M:%.0f%% T:%.0fC", moisture, temperature);
-				OLED_ShowString(3, 1, data_str);
-				sprintf(data_str, "  EC:%d PH:%.1f", ec, ph);
-				OLED_ShowString(4, 1, data_str);
+				printf("[Soil Sensor] 读取成功\r\n");
 			} else {
-				printf("[Soil Sensor] 读取失败，错误码: %d\r\n", result);
-				OLED_ShowString(1, 1, "  Soil Sensor");
-				OLED_ShowString(2, 1, "  Read Failed");
-				OLED_ShowString(3, 1, "  Error Code:");
-				char error_str[10];
-				sprintf(error_str, "  %d", result);
-				OLED_ShowString(4, 1, error_str);
+				printf("[Soil Sensor] 读取失败\r\n");
 			}
+		}
+		
+		// 每30秒检查一次ATK-D43状态
+		if (timecount % 30000 == 0) {
+			printf("[System] 检查ATK-D43状态...\r\n");
+			OLED_ShowString(1, 1, "  System Check");
+			OLED_ShowString(2, 1, "  ATK-D43");
+			
+			// 发送测试数据，验证通信
+			USART_SendString(USART1, "AT\r\n");
+			delay_ms(1000);
+			if (g_usart_rx_sta & 0x8000) {
+				printf("[System] ATK-D43通信正常: %s\r\n", g_usart_rx_buf);
+				OLED_ShowString(3, 1, "  Status: OK");
+			} else {
+				printf("[System] ATK-D43通信异常，重新初始化...\r\n");
+				OLED_ShowString(3, 1, "  Status: Error");
+				
+				// 重新初始化
+				dtu_config_init(DTU_WORKMODE_MQTT, DTU_COLLECT_OFF);
+				dtu_power_reset();
+				delay_ms(5000);
+			}
+			// 清空接收缓冲区
+			g_usart_rx_sta = 0;
 		}
 		
 		// 每10秒检查一次WiFi连接状态（暂时注释，避免与RS485引脚冲突）

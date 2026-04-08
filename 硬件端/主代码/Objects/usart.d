@@ -30,3 +30,4 @@
 .\objects\usart.o: .\Library\stm32f10x_wwdg.h
 .\objects\usart.o: .\Library\misc.h
 .\objects\usart.o: D:\Program Files\ARM\ARMCC\Bin\..\include\stdio.h
+.\objects\usart.o: .\Hardware\atk_d43.h

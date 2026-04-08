@@ -44,3 +44,4 @@
 .\objects\main.o: User\../Hardware/RS485.h
 .\objects\main.o: D:\Program Files\ARM\ARMCC\Bin\..\include\stdarg.h
 .\objects\main.o: User\../Hardware/SoilSensor.h
+.\objects\main.o: User\../Hardware/atk_d43.h
