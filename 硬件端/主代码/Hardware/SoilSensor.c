@@ -1,19 +1,35 @@
+/**
+ * @file    SoilSensor.c
+ * @brief   土壤传感器驱动
+ * @details 基于RS485和Modbus协议的土壤传感器驱动，支持读取土壤湿度、温度、电导率和PH值
+ * @author  Smart Agriculture Team
+ * @date    2026-04-11
+ * @version 1.0.0
+ * @note    使用USART3进行RS485通信，波特率4800
+ */
+
 #include "stm32f10x.h"
 #include "RS485.h"
 #include "SoilSensor.h"
 #include "../System/Delay.h"
 
-#define SOIL_SENSOR_ADDR 0x01 // 土壤传感器地址
+/* ==================== 宏定义 ==================== */
 
-// 外部变量声明
-extern uint8_t USART3_RX_BUF[USART3_REC_LEN];
-extern uint16_t USART3_RX_STA;
+#define SOIL_SENSOR_ADDR 0x01             // 土壤传感器地址
+
+/* ==================== 外部变量声明 ==================== */
+
+extern uint8_t USART3_RX_BUF[USART3_REC_LEN];  // USART3接收缓冲区
+extern uint16_t USART3_RX_STA;                  // USART3接收状态
+
+/* ==================== 函数实现 ==================== */
 
 /**
- * @brief 计算Modbus CRC16校验和
- * @param data 数据数组
- * @param length 数据长度
- * @retval CRC16校验和
+ * @brief   计算Modbus CRC16校验和
+ * @details 根据Modbus协议计算CRC16校验和
+ * @param   data 数据数组
+ * @param   length 数据长度
+ * @return  CRC16校验和
  */
 uint16_t SoilSensor_CalculateCRC16(uint8_t *data, uint8_t length)
 {
@@ -37,10 +53,13 @@ uint16_t SoilSensor_CalculateCRC16(uint8_t *data, uint8_t length)
 }
 
 /**
- * @brief 验证CRC16校验和
- * @param data 数据数组（包含CRC）
- * @param length 数据长度（包含CRC）
- * @retval 0: 校验成功, 1: 校验失败
+ * @brief   验证CRC16校验和
+ * @details 验证接收数据的CRC16校验和是否正确
+ * @param   data 数据数组（包含CRC）
+ * @param   length 数据长度（包含CRC）
+ * @return  验证结果
+ * @retval  0: 校验成功
+ * @retval  1: 校验失败
  */
 uint8_t SoilSensor_VerifyCRC16(uint8_t *data, uint8_t length)
 {
@@ -54,9 +73,9 @@ uint8_t SoilSensor_VerifyCRC16(uint8_t *data, uint8_t length)
 }
 
 /**
- * @brief 打印接收到的数据
- * @param 无
- * @retval 无
+ * @brief   打印接收到的数据
+ * @details 在串口调试助手上显示接收到的HEX数据
+ * @note    用于调试目的
  */
 void SoilSensor_PrintReceivedData(void)
 {
@@ -70,12 +89,18 @@ void SoilSensor_PrintReceivedData(void)
 }
 
 /**
- * @brief 读取土壤传感器数据
- * @param moisture 含水率指针（%）
- * @param temperature 温度值指针（℃）
- * @param ec 电导率指针（us/cm）
- * @param ph PH值指针
- * @retval 0: 成功, 1: 超时, 2: 响应错误, 3: CRC校验失败
+ * @brief   读取土壤传感器数据
+ * @details 通过Modbus协议读取土壤传感器的湿度、温度、电导率和PH值
+ * @param   moisture 含水率指针（%）
+ * @param   temperature 温度值指针（℃）
+ * @param   ec 电导率指针（μS/cm）
+ * @param   ph PH值指针
+ * @return  读取结果
+ * @retval  0: 成功
+ * @retval  1: 超时
+ * @retval  2: 响应错误
+ * @retval  3: CRC校验失败
+ * @note    使用Modbus功能码0x03读取4个寄存器
  */
 uint8_t SoilSensor_ReadData(float *moisture, float *temperature, uint16_t *ec, float *ph)
 {

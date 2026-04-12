@@ -1,47 +1,55 @@
+/**
+ * @file    Delay.c
+ * @brief   延时函数实现文件
+ * @details 实现微秒、毫秒、秒级延时功能
+ * @author  Smart Agriculture Team
+ * @date    2026-04-11
+ * @version 1.0.0
+ * @note    基于SysTick定时器实现
+ */
+
 #include "stm32f10x.h"
 
+/* ==================== 新版延时函数（基于SysTick） ==================== */
+
 /**
-  * @brief  微秒级延时
-  * @param  xus 延时时长，范围：0~233015
-  * @retval 无
-  */
+ * @brief   微秒级延时
+ * @param   xus 延时时长，范围：0~233015
+ */
 void Delay_us(uint32_t xus)
 {
-	SysTick->LOAD = 72 * xus;				//设置定时器重装值
-	SysTick->VAL = 0x00;					//清空当前计数值
-	SysTick->CTRL = 0x00000005;				//设置时钟源为HCLK，启动定时器
-	while(!(SysTick->CTRL & 0x00010000));	//等待计数到0
-	SysTick->CTRL = 0x00000004;				//关闭定时器
+    SysTick->LOAD = 72 * xus;               // 设置定时器重装值
+    SysTick->VAL = 0x00;                    // 清空当前计数值
+    SysTick->CTRL = 0x00000005;             // 设置时钟源为HCLK，启动定时器
+    while(!(SysTick->CTRL & 0x00010000));   // 等待计数到0
+    SysTick->CTRL = 0x00000004;             // 关闭定时器
 }
 
 /**
-  * @brief  毫秒级延时
-  * @param  xms 延时时长，范围：0~4294967295
-  * @retval 无
-  */
+ * @brief   毫秒级延时
+ * @param   xms 延时时长，范围：0~4294967295
+ */
 void Delay_ms(uint32_t xms)
 {
-	while(xms--)
-	{
-		Delay_us(1000);
-	}
+    while(xms--)
+    {
+        Delay_us(1000);
+    }
 }
- 
+
 /**
-  * @brief  秒级延时
-  * @param  xs 延时时长，范围：0~4294967295
-  * @retval 无
-  */
+ * @brief   秒级延时
+ * @param   xs 延时时长，范围：0~4294967295
+ */
 void Delay_s(uint32_t xs)
 {
-	while(xs--)
-	{
-		Delay_ms(1000);
-	}
-} 
+    while(xs--)
+    {
+        Delay_ms(1000);
+    }
+}
 
-
-
+/* ==================== 旧版延时函数（兼容性） ==================== */
 
 #include "sys.h"
 #include "Delay.h"
@@ -59,7 +67,7 @@ static uint16_t fac_ms = 0;         /* ms延时倍乘数 */
 #define delay_osintnesting  OSIntNesting
 
 /**
- * @brief  锁定任务调度
+ * @brief   锁定任务调度
  */
 static void delay_osschedlock(void)
 {
@@ -67,7 +75,7 @@ static void delay_osschedlock(void)
 }
 
 /**
- * @brief  解锁任务调度
+ * @brief   解锁任务调度
  */
 static void delay_osschedunlock(void)
 {
@@ -75,8 +83,8 @@ static void delay_osschedunlock(void)
 }
 
 /**
- * @brief  OS延时
- * @param  ticks: 延时的节拍数
+ * @brief   OS延时
+ * @param   ticks: 延时的节拍数
  */
 static void delay_ostimedly(uint32_t ticks)
 {
@@ -84,7 +92,7 @@ static void delay_ostimedly(uint32_t ticks)
 }
 
 /**
- * @brief  SysTick中断服务函数
+ * @brief   SysTick中断服务函数
  */
 void SysTick_Handler(void)
 {
@@ -96,8 +104,8 @@ void SysTick_Handler(void)
 #endif
 
 /**
- * @brief  初始化延时函数
- * @param  SYSCLK: 系统时钟频率(单位:MHz)
+ * @brief   初始化延时函数
+ * @param   SYSCLK: 系统时钟频率（单位:MHz）
  */
 void delay_init(uint8_t SYSCLK)
 {
@@ -113,8 +121,8 @@ void delay_init(uint8_t SYSCLK)
 }
 
 /**
- * @brief  微秒级延时
- * @param  nus: 要延时的us数
+ * @brief   微秒级延时
+ * @param   nus: 要延时的us数
  */
 void delay_us(uint32_t nus)
 {
@@ -141,8 +149,8 @@ void delay_us(uint32_t nus)
 }
 
 /**
- * @brief  毫秒级延时
- * @param  nms: 要延时的ms数
+ * @brief   毫秒级延时
+ * @param   nms: 要延时的ms数
  */
 void delay_ms(uint16_t nms)
 {
@@ -171,6 +179,3 @@ void delay_ms(uint16_t nms)
     SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk;           /* 关闭计数器 */
     SysTick->VAL = 0X00;                                 /* 清空计数器 */
 }
-
-
-

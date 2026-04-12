@@ -1,21 +1,11 @@
 /**
- ****************************************************************************************************
- * @file        demo.c
- * @author      �֡짦���-�٧ԧ�������(ALIENTEK)
- * @version     V1.0
- * @date        2024-11-28
- * @brief       ATK-MB026��?����TCP������?�����ҧ�
- * @license     Copyright (c) 2020-2032, ����اߧ��ѧѧ��ӧ罹��٧ԧ��������ԧѧ��৫?����
- ****************************************************************************************************
- * @attention
- *
- * �����ҧ맸����?:�֡짦���-�٧� M48Z-M3�٧�ѧ�������������STM32F103����
- * �էܧ��᧼�ԧ���:www.yuanzige.com
- * ������?���ݧ���:www.openedv.com
- * ��?������?�ا�:www.alientek.com
- * ������?���ڧا�:openedv.taobao.com
- *
- ****************************************************************************************************
+ * @file    demo.c
+ * @brief   ATK-MB026 WiFi模块TCP透传演示
+ * @details 实现WiFi模块初始化、TCP连接、数据传输等功能
+ * @author  Smart Agriculture Team
+ * @date    2026-04-11
+ * @version 1.0.0
+ * @note    基于ATK-MB026 WiFi模块和STM32F103微控制器开发
  */
 
 #include "demo.h"
@@ -26,67 +16,57 @@
 #include "LED.h"
 #include <string.h>
 
-// 全局变量定义
-uint8_t g_is_unvarnished = 0; // 透传模式状态标志
+/* ==================== 全局变量定义 ==================== */
 
-extern uint32_t timecount; // 外部时间计数变量
+uint8_t g_is_unvarnished = 0;                       // 透传模式状态标志（0: 普通模式, 1: 透传模式）
 
-// 定义缺失的传感器变量
-u8 Temp_buffer[3] = {0, 25, 0};           // 温度数据缓冲区，默认25℃
-u8 humidata = 50;        // 湿度数据，默认50%
-extern vu16 ADC_ConvertedValue[4]; // ADC转换值，已在AD.c中定义
-uint8_t temperature = 25; // 温度值，默认25℃
-uint8_t servo = 0; // 舵机状态
-uint8_t motor = 0; // 电机状态
-uint8_t tempdata = 25; // 温度数据
+extern uint32_t timecount;                          // 外部时间计数变量（ms）
 
-#define DEMO_TCP_SERVER_IP      ""
-#define DEMO_TCP_SERVER_PORT    ""
+/* ==================== 传感器变量定义 ==================== */
 
+u8 Temp_buffer[3] = {0, 25, 0};                     // 温度数据缓冲区，默认25℃
+u8 humidata = 50;                                   // 湿度数据，默认50%
+extern vu16 ADC_ConvertedValue[4];                  // ADC转换值，已在AD.c中定义
+uint8_t temperature = 25;                           // 温度值，默认25℃
+uint8_t servo = 0;                                  // 舵机状态
+uint8_t motor = 0;                                  // 电机状态
+uint8_t tempdata = 25;                              // 温度数据
 
-//#define DEMO_WIFI_SSID          "Redmi Note 11 5G"
-//#define DEMO_WIFI_PWD           "244466666"
-//#define DEMO_TCP_SERVER_IP      "192.168.90.58"
-//#define DEMO_TCP_SERVER_PORT    "5000"
+/* ==================== 配置参数定义 ==================== */
 
-uint8_t test = 0;
-uint8_t mode = 0;
+#define DEMO_TCP_SERVER_IP      ""                  // TCP服务器IP地址
+#define DEMO_TCP_SERVER_PORT    ""                  // TCP服务器端口
+
+/* ==================== 其他变量 ==================== */
+
+uint8_t test = 0;                                   // 测试标志
+uint8_t mode = 0;                                   // 运行模式
+
+/* ==================== 外部变量声明 ==================== */
 
 extern uint8_t temperature;
-extern vu16 ADC_ConvertedValue[4]; //ADC����ا����觩������٧�
-extern u8 Temp_buffer[3];           //���������������᧾��ا�
-extern u8 humidata;        //��?�����������᧾��ا�
-extern uint8_t servo;
-extern uint8_t motor;        //���觭???���駭?�����٧���?����ا�����			
-extern uint8_t tempdata;
+extern vu16 ADC_ConvertedValue[4];                  // ADC转换值
+extern u8 Temp_buffer[3];                           // 温度数据缓冲区
+extern u8 humidata;                                 // 湿度数据
+extern uint8_t servo;                               // 舵机状态
+extern uint8_t motor;                               // 电机状态
+extern uint8_t tempdata;                            // 温度数据
 
-/* ���ӿ������������ */
-//static void handle_control_command(const char* data, uint16_t len)
-//{
-//    // ����LED������
-//    if (strstr(data, "LED_ON") != NULL) {
-//        printf("Turning LED on\r\n");
-//        LED1_ON();  // ��LED
-//    } 
-//    else if (strstr(data, "LED_OFF") != NULL) {
-//        printf("Turning LED off\r\n");
-//        LED1_OFF();  // �ر�LED
-//    }
-//    // ���Ӹ�������߼�...
-//    else if (strstr(data, "MOTOR_ON") != NULL) {
-//        printf("Turning motor on\r\n");
-//        // Motor_On();
-//    }
-//    else if (strstr(data, "MOTOR_OFF") != NULL) {
-//        printf("Turning motor off\r\n");
-//        // Motor_Off();
-//    }
-//}
+/* ==================== 函数实现 ==================== */
 
+/**
+ * @brief   显示IP地址
+ * @param   buf IP地址字符串
+ */
 void demo_show_ip(char *buf) {
     printf("IP: %s\r\n", buf);
 }
 
+/**
+ * @brief   KEY0按键功能
+ * @param   is_unvarnished 透传模式状态
+ * @details 在普通模式下执行AT测试，在透传模式下发送测试数据
+ */
 void demo_key0_fun(uint8_t is_unvarnished) {
     uint8_t ret;
     if (is_unvarnished == 0) {
@@ -97,17 +77,22 @@ void demo_key0_fun(uint8_t is_unvarnished) {
             printf("AT test failed!\r\n");
         }
     } else {
-        // ʹ�ñ�׼����ⷢ������
+        // 使用标准库发送测试数据
         atk_mb026_uart_printf("This ATK-MB026 TCP Connect Test.\r\n");
     }
 }
 
+/**
+ * @brief   WKUP按键功能
+ * @param   is_unvarnished 透传模式状态指针
+ * @details 切换透传模式和普通传输模式
+ */
 void demo_keywkup_fun(uint8_t *is_unvarnished) {
     uint8_t ret;
     if (*is_unvarnished == 0) {
         /* 等待TCP连接稳定 */
-         printf("[DEBUG] 等待TCP连接稳定...\r\n");
-         delay_ms(2000);  /* 等待2秒确保连接稳定 */
+        printf("[DEBUG] 等待TCP连接稳定...\r\n");
+        delay_ms(2000);  /* 等待2秒确保连接稳定 */
         
         /* 检查连接状态 */
         printf("[DEBUG] 检查TCP连接状态...\r\n");
@@ -121,30 +106,30 @@ void demo_keywkup_fun(uint8_t *is_unvarnished) {
             printf("[SUCCESS] 模块状态正常\r\n");
             
             /* 尝试进入透传模式 */
-             printf("[DEBUG] 尝试进入透传模式...\r\n");
-             ret = atk_mb026_enter_unvarnished();
-             if (ret != 0)
-             {
-                 printf("[ERROR] 进入透传模式失败! 错误码: %d\r\n", ret);
-                 printf("[DEBUG] 可能原因: TCP连接未建立或AT指令响应超时\r\n");
-                 printf("[INFO] 将使用普通传输模式作为备用方案\r\n");
-                 
-                 /* 设置为普通传输模式 */
-                 ret = atk_mb026_send_at_cmd("AT+CIPMODE=0", "OK", 1000);
-                 if (ret == 0) {
-                     printf("[SUCCESS] 已切换到普通传输模式\r\n");
-                     *is_unvarnished = 0;  /* 标记为非透传模式 */
-                     g_is_unvarnished = 0;
-                 } else {
-                     printf("[ERROR] 切换到普通传输模式失败\r\n");
-                 }
-             }
-             else
-             {
-                 *is_unvarnished = 1;
-                 g_is_unvarnished = 1; // 更新全局状态
-                 printf("[SUCCESS] 进入透传模式成功!\r\n");
-             }
+            printf("[DEBUG] 尝试进入透传模式...\r\n");
+            ret = atk_mb026_enter_unvarnished();
+            if (ret != 0)
+            {
+                printf("[ERROR] 进入透传模式失败! 错误码: %d\r\n", ret);
+                printf("[DEBUG] 可能原因: TCP连接未建立或AT指令响应超时\r\n");
+                printf("[INFO] 将使用普通传输模式作为备用方案\r\n");
+                
+                /* 设置为普通传输模式 */
+                ret = atk_mb026_send_at_cmd("AT+CIPMODE=0", "OK", 1000);
+                if (ret == 0) {
+                    printf("[SUCCESS] 已切换到普通传输模式\r\n");
+                    *is_unvarnished = 0;  /* 标记为非透传模式 */
+                    g_is_unvarnished = 0;
+                } else {
+                    printf("[ERROR] 切换到普通传输模式失败\r\n");
+                }
+            }
+            else
+            {
+                *is_unvarnished = 1;
+                g_is_unvarnished = 1; // 更新全局状态
+                printf("[SUCCESS] 进入透传模式成功!\r\n");
+            }
         }
     } else {
         test = 0;
@@ -155,30 +140,36 @@ void demo_keywkup_fun(uint8_t *is_unvarnished) {
     }
 }
 
+/**
+ * @brief   上传数据
+ * @param   is_unvarnished 透传模式状态
+ * @details 在透传模式下接收并显示服务器数据
+ */
 void demo_upload_data(uint8_t is_unvarnished) {
     uint8_t *buf;
     
     if (is_unvarnished == 1)
     {
-        /* ��������ATK-MB026 UART��һ֡���� */
+        /* 接收来自ATK-MB026 UART的一帧数据 */
         buf = atk_mb026_uart_rx_get_frame();
         if (buf != NULL)
         {
             printf("%s", buf);
-            /* ���¿�ʼ��������ATK-MB026 UART������ */
+            /* 重新开始接收来自ATK-MB026 UART的数据 */
             atk_mb026_uart_rx_restart();
         }
     }
 }
 
+/**
+ * @brief   运行演示程序
+ * @details 初始化WiFi模块，连接AP，建立TCP连接并处理数据传输
+ */
 void demo_run(void) {
     uint8_t ret;
     char ip_buf[16];
     uint8_t key;
     static uint8_t is_unvarnished = 0; // 改为静态变量，保持状态
-
-////	// ���ûص�����
-////	atk_mb026_receiver_set_callback(handle_control_command);
 
     if(mode == 0)
     {
@@ -233,11 +224,9 @@ void demo_run(void) {
             printf("[DEBUG] 连接协议消息已发送\r\n");
         }
         mode = 1;
-				demo_keywkup_fun(&is_unvarnished);
+        demo_keywkup_fun(&is_unvarnished);
     }
 
-		
-		
     key = key_scan(1);
 
     switch (key) {
@@ -245,8 +234,7 @@ void demo_run(void) {
             demo_key0_fun(is_unvarnished);
             break;
         case WKUP_PRES:
-            
-		    		test = 1;
+            test = 1;
             break;
         default:
             if (test == 1) 
@@ -276,16 +264,14 @@ void demo_run(void) {
                         printf("[ERROR] 普通传输模式发送失败\r\n");
                     }
                 }
-                Delay_ms(5000);        //防止数据发送过快
+                Delay_ms(5000);        // 防止数据发送过快
             }
             break;
     }
 
-    // �������յ�������
+    // 处理接收到的数据
     atk_mb026_receiver_process();
     
     demo_upload_data(is_unvarnished);
     delay_ms(10);
 }
-
-

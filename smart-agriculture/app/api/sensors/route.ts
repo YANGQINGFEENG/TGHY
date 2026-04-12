@@ -1,144 +1,172 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { db, RowDataPacket, ResultSetHeader } from '@/lib/db'
 
-// 模拟数据库连接和操作
-const mockDatabase = {
-  sensorTypes: [
-    { id: 1, type: 'temperature', name: '温度传感器', unit: '°C' },
-    { id: 2, type: 'humidity', name: '空气湿度传感器', unit: '%' },
-    { id: 3, type: 'light', name: '光照传感器', unit: 'Lux' },
-    { id: 4, type: 'soil', name: '土壤湿度传感器', unit: '%' },
-  ],
-  sensors: [
-    { id: 'T-001', name: 'A区温室1号温度传感器', type_id: 1, location: 'A区温室', status: 'online', battery: 95, last_update: new Date() },
-    { id: 'T-002', name: 'A区温室2号温度传感器', type_id: 1, location: 'A区温室', status: 'online', battery: 92, last_update: new Date() },
-    { id: 'T-003', name: 'B区温室1号温度传感器', type_id: 1, location: 'B区温室', status: 'online', battery: 88, last_update: new Date() },
-    { id: 'H-001', name: 'A区温室1号湿度传感器', type_id: 2, location: 'A区温室', status: 'online', battery: 90, last_update: new Date() },
-    { id: 'H-002', name: 'B区温室1号湿度传感器', type_id: 2, location: 'B区温室', status: 'online', battery: 85, last_update: new Date() },
-    { id: 'L-001', name: 'A区温室1号光照传感器', type_id: 3, location: 'A区温室', status: 'online', battery: 93, last_update: new Date() },
-    { id: 'L-002', name: 'B区温室1号光照传感器', type_id: 3, location: 'B区温室', status: 'online', battery: 89, last_update: new Date() },
-    { id: 'S-001', name: 'A区温室1号土壤湿度传感器', type_id: 4, location: 'A区温室', status: 'online', battery: 91, last_update: new Date() },
-    { id: 'S-002', name: 'B区温室1号土壤湿度传感器', type_id: 4, location: 'B区温室', status: 'online', battery: 87, last_update: new Date() },
-    { id: 'S-003', name: 'C区大棚1号土壤湿度传感器', type_id: 4, location: 'C区大棚', status: 'online', battery: 84, last_update: new Date() },
-  ],
-  sensorData: [],
+/**
+ * 传感器数据接口
+ */
+interface Sensor extends RowDataPacket {
+  id: string
+  name: string
+  type_id: number
+  location: string
+  status: 'online' | 'offline'
+  battery: number
+  last_update: Date | null
+  created_at: Date
+  type?: string
+  type_name?: string
+  unit?: string
 }
 
-// 生成模拟数据
-function generateMockData() {
-  const data = []
-  const now = new Date()
-  
-  // 为每个传感器生成24小时的数据
-  mockDatabase.sensors.forEach(sensor => {
-    for (let i = 0; i < 24; i++) {
-      const timestamp = new Date(now.getTime() - i * 60 * 60 * 1000)
-      let value = 0
-      
-      if (sensor.type_id === 1) { // 温度
-        value = 18 + Math.random() * 12
-      } else if (sensor.type_id === 2) { // 湿度
-        value = 50 + Math.random() * 30
-      } else if (sensor.type_id === 3) { // 光照
-        value = 5000 + Math.random() * 10000
-      } else if (sensor.type_id === 4) { // 土壤湿度
-        value = 30 + Math.random() * 30
-      }
-      
-      data.push({
-        id: data.length + 1,
-        sensor_id: sensor.id,
-        value: parseFloat(value.toFixed(2)),
-        timestamp,
-      })
-    }
-  })
-  
-  mockDatabase.sensorData = data
+/**
+ * 传感器类型数据接口
+ */
+interface SensorType extends RowDataPacket {
+  id: number
+  type: string
+  name: string
+  unit: string
 }
 
-// 初始化模拟数据
-generateMockData()
-
-// GET /api/sensors - 获取所有传感器
+/**
+ * GET /api/sensors
+ * 获取所有传感器
+ * 支持按类型过滤：?type=temperature
+ */
 export async function GET(request: NextRequest) {
-  const url = new URL(request.url)
-  const type = url.searchParams.get('type')
-  
-  let sensors = [...mockDatabase.sensors]
-  
-  if (type) {
-    const typeId = mockDatabase.sensorTypes.find(t => t.type === type)?.id
-    if (typeId) {
-      sensors = sensors.filter(s => s.type_id === typeId)
+  try {
+    const url = new URL(request.url)
+    const type = url.searchParams.get('type')
+
+    let query = `
+      SELECT 
+        s.id, 
+        s.name, 
+        s.type_id, 
+        s.location, 
+        s.status, 
+        s.battery, 
+        s.last_update, 
+        s.created_at,
+        st.type,
+        st.name as type_name,
+        st.unit
+      FROM sensors s
+      INNER JOIN sensor_types st ON s.type_id = st.id
+    `
+
+    const params: any[] = []
+
+    if (type) {
+      query += ' WHERE st.type = ?'
+      params.push(type)
     }
+
+    query += ' ORDER BY s.id'
+
+    const rows = await db.query<Sensor[]>(query, params)
+
+    return NextResponse.json({
+      success: true,
+      data: rows,
+      total: rows.length,
+    })
+  } catch (error) {
+    console.error('获取传感器列表失败:', error)
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: '获取传感器列表失败',
+        details: error instanceof Error ? error.message : '未知错误'
+      },
+      { status: 500 }
+    )
   }
-  
-  // 关联传感器类型信息
-  const sensorsWithType = sensors.map(sensor => {
-    const type = mockDatabase.sensorTypes.find(t => t.id === sensor.type_id)
-    return {
-      ...sensor,
-      type: type?.type,
-      type_name: type?.name,
-      unit: type?.unit,
-    }
-  })
-  
-  return NextResponse.json({
-    success: true,
-    data: sensorsWithType,
-    total: sensorsWithType.length,
-  })
 }
 
-// POST /api/sensors - 新增传感器
+/**
+ * POST /api/sensors
+ * 新增传感器
+ */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     
-    // 验证请求数据
     if (!body.name || !body.type_id || !body.location) {
       return NextResponse.json(
-        { success: false, error: '缺少必要参数' },
+        { success: false, error: '缺少必要参数：name, type_id, location' },
         { status: 400 }
       )
     }
-    
-    // 生成传感器ID
-    const type = mockDatabase.sensorTypes.find(t => t.id === body.type_id)
-    if (!type) {
+
+    const types = await db.query<SensorType[]>(
+      'SELECT id, type FROM sensor_types WHERE id = ?',
+      [body.type_id]
+    )
+
+    if (types.length === 0) {
       return NextResponse.json(
         { success: false, error: '传感器类型不存在' },
         { status: 400 }
       )
     }
+
+    const typePrefix = types[0].type.charAt(0).toUpperCase()
     
-    const typePrefix = type.type.charAt(0).toUpperCase()
-    const existingIds = mockDatabase.sensors
-      .filter(s => s.id.startsWith(typePrefix))
-      .map(s => parseInt(s.id.split('-')[1]) || 0)
-    const newId = Math.max(...existingIds, 0) + 1
-    const sensorId = `${typePrefix}-${newId.toString().padStart(3, '0')}`
-    
-    const newSensor = {
-      id: sensorId,
-      name: body.name,
-      type_id: body.type_id,
-      location: body.location,
-      status: 'offline',
-      battery: 100,
-      last_update: null,
+    const existingSensors = await db.query<Sensor[]>(
+      'SELECT id FROM sensors WHERE id LIKE ? ORDER BY id DESC',
+      [`${typePrefix}-%`]
+    )
+
+    let newIdNumber = 1
+    if (existingSensors.length > 0) {
+      const lastId = existingSensors[0].id
+      const lastNumber = parseInt(lastId.split('-')[1])
+      if (!isNaN(lastNumber)) {
+        newIdNumber = lastNumber + 1
+      }
     }
-    
-    mockDatabase.sensors.push(newSensor)
-    
+
+    const sensorId = `${typePrefix}-${newIdNumber.toString().padStart(3, '0')}`
+
+    await db.execute<ResultSetHeader>(
+      `INSERT INTO sensors (id, name, type_id, location, status, battery, last_update) 
+       VALUES (?, ?, ?, ?, 'offline', 100, NULL)`,
+      [sensorId, body.name, body.type_id, body.location]
+    )
+
+    const newSensors = await db.query<Sensor[]>(
+      `SELECT 
+        s.id, 
+        s.name, 
+        s.type_id, 
+        s.location, 
+        s.status, 
+        s.battery, 
+        s.last_update, 
+        s.created_at,
+        st.type,
+        st.name as type_name,
+        st.unit
+      FROM sensors s
+      INNER JOIN sensor_types st ON s.type_id = st.id
+      WHERE s.id = ?`,
+      [sensorId]
+    )
+
     return NextResponse.json({
       success: true,
-      data: newSensor,
+      data: newSensors[0],
+      message: '传感器创建成功',
     })
   } catch (error) {
+    console.error('创建传感器失败:', error)
     return NextResponse.json(
-      { success: false, error: '服务器内部错误' },
+      { 
+        success: false, 
+        error: '创建传感器失败',
+        details: error instanceof Error ? error.message : '未知错误'
+      },
       { status: 500 }
     )
   }

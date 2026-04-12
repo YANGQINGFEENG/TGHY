@@ -1,26 +1,22 @@
 /**
- ****************************************************************************************************
- * @file        atk_mb026.c
- * @author      ����ԭ���Ŷ�(ALIENTEK)
- * @version     V1.0
- * @date        2024-11-28
- * @brief       ATK_MB026ģ����������
- * @license     Copyright (c) 2020-2032, �������������ӿƼ����޹�˾
- ****************************************************************************************************
- * @attention
- *
- * ʵ��ƽ̨:����ԭ�� M48Z-M3��Сϵͳ��STM32F103��
- * ������Ƶ:www.yuanzige.com
- * ������̳:www.openedv.com
- * ��˾��ַ:www.alientek.com
- * �����ַ:openedv.taobao.com
- *
- ****************************************************************************************************
+ * @file    atk_mb026.c
+ * @brief   ATK-MB026 WiFi模块驱动实现文件
+ * @details 实现ATK-MB026 WiFi模块的初始化和控制功能
+ * @author  Smart Agriculture Team
+ * @date    2026-04-11
+ * @version 1.0.0
+ * @note    基于STM32F103微控制器
  */
 
 #include "atk_mb026.h"
 #include "delay.h"
 
+/* ==================== 内部函数 ==================== */
+
+/**
+ * @brief   ATK-MB026硬件初始化
+ * @details 初始化复位引脚
+ */
 static void atk_mb026_hw_init(void)
 {
     GPIO_InitTypeDef GPIO_InitStructure;
@@ -33,6 +29,11 @@ static void atk_mb026_hw_init(void)
     GPIO_Init(ATK_MB026_RST_GPIO_PORT, &GPIO_InitStructure);
 }
 
+/* ==================== 函数实现 ==================== */
+
+/**
+ * @brief   ATK-MB026硬件复位
+ */
 void atk_mb026_hw_reset(void)
 {
     ATK_MB026_RST(0);
@@ -41,6 +42,14 @@ void atk_mb026_hw_reset(void)
     delay_ms(500);
 }
 
+/**
+ * @brief   ATK-MB026发送AT指令
+ * @param   cmd AT指令
+ * @param   ack 期望的应答
+ * @param   timeout 超时时间（毫秒）
+ * @return  ATK_MB026_EOK: 成功
+ *          ATK_MB026_ETIMEOUT: 超时
+ */
 uint8_t atk_mb026_send_at_cmd(char *cmd, char *ack, uint32_t timeout)
 {
     uint8_t *ret = NULL;
@@ -76,6 +85,12 @@ uint8_t atk_mb026_send_at_cmd(char *cmd, char *ack, uint32_t timeout)
     }
 }
 
+/**
+ * @brief   ATK-MB026初始化
+ * @param   baudrate UART波特率
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_init(uint32_t baudrate)
 {
     atk_mb026_hw_init();
@@ -90,6 +105,11 @@ uint8_t atk_mb026_init(uint32_t baudrate)
     return ATK_MB026_EOK;
 }
 
+/**
+ * @brief   ATK-MB026恢复出厂设置
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_restore(void)
 {
     uint8_t ret;
@@ -106,6 +126,11 @@ uint8_t atk_mb026_restore(void)
     }
 }
 
+/**
+ * @brief   ATK-MB026 AT指令测试
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_at_test(void)
 {
     uint8_t ret;
@@ -123,6 +148,12 @@ uint8_t atk_mb026_at_test(void)
     return ATK_MB026_ERROR;
 }
 
+/**
+ * @brief   ATK-MB026设置系统提示信息
+ * @param   mode 模式（1: 关闭，2: 开启，3: 详细）
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_at_sysmsg(uint8_t mode)
 {
     uint8_t ret;
@@ -152,6 +183,12 @@ uint8_t atk_mb026_at_sysmsg(uint8_t mode)
     }
 }
 
+/**
+ * @brief   ATK-MB026蓝牙初始化
+ * @param   mode 模式（1: 关闭，2: 客户端，3: 服务器）
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_ble_init(uint8_t mode)
 {
     uint8_t ret;
@@ -181,6 +218,11 @@ uint8_t atk_mb026_ble_init(uint8_t mode)
     }
 }
 
+/**
+ * @brief   ATK-MB026 GATTS服务配置
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_ble_gatts(void)
 {
     uint8_t ret;
@@ -197,6 +239,11 @@ uint8_t atk_mb026_ble_gatts(void)
     }
 }
 
+/**
+ * @brief   ATK-MB026 GATTS服务全部开启
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_ble_gattssrvstart(void)
 {
     uint8_t ret;
@@ -213,6 +260,12 @@ uint8_t atk_mb026_ble_gattssrvstart(void)
     }
 }
 
+/**
+ * @brief   ATK-MB026获取本机设备地址
+ * @param   buf 存储地址的缓冲区
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_get_addr(char *buf)
 {
     uint8_t ret;
@@ -233,6 +286,12 @@ uint8_t atk_mb026_get_addr(char *buf)
     return ATK_MB026_EOK;
 }
 
+/**
+ * @brief   ATK-MB026设置本机设备地址类型
+ * @param   mode 地址类型（1: 公共地址，2: 随机地址）
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_set_addr(uint8_t mode)
 {
     uint8_t ret;
@@ -259,6 +318,12 @@ uint8_t atk_mb026_set_addr(uint8_t mode)
     }
 }
 
+/**
+ * @brief   ATK-MB026获取本机设备广播参数
+ * @param   buf 存储广播参数的缓冲区
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_get_advparam(char *buf)
 {
     uint8_t ret;
@@ -279,6 +344,16 @@ uint8_t atk_mb026_get_advparam(char *buf)
     return ATK_MB026_EOK;
 }
 
+/**
+ * @brief   ATK-MB026设置广播参数
+ * @param   adv_int_min 广播间隔最小值
+ * @param   adv_int_max 广播间隔最大值
+ * @param   adv_type 广播类型
+ * @param   own_addr_type 本机地址类型
+ * @param   channel_map 广播信道映射
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_set_advparam(char *adv_int_min, char *adv_int_max, char *adv_type, char *own_addr_type, char *channel_map)
 {
     uint8_t ret;
@@ -297,6 +372,12 @@ uint8_t atk_mb026_set_advparam(char *adv_int_min, char *adv_int_max, char *adv_t
     }
 }
 
+/**
+ * @brief   ATK-MB026设置广播数据
+ * @param   adv_data 广播数据
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_set_advdata(char *adv_data)
 {
     uint8_t ret;
@@ -315,6 +396,15 @@ uint8_t atk_mb026_set_advdata(char *adv_data)
     }
 }
 
+/**
+ * @brief   ATK-MB026自定义设置广播数据
+ * @param   dev_name 设备名称
+ * @param   uuid UUID
+ * @param   manufacturer_data 制造商数据
+ * @param   include_power 是否包含发射功率
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_set_advdataex(char *dev_name, char *uuid, char *manufacturer_data, uint16_t include_power)
 {
     uint8_t ret;
@@ -334,6 +424,11 @@ uint8_t atk_mb026_set_advdataex(char *dev_name, char *uuid, char *manufacturer_d
     }
 }
 
+/**
+ * @brief   ATK-MB026开始Bluetooth LE广播
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_advstart(void)
 {
     uint8_t ret;
@@ -350,6 +445,17 @@ uint8_t atk_mb026_advstart(void)
     }
 }
 
+/**
+ * @brief   ATK-MB026设置Bluetooth LE SPP配置
+ * @param   cfg_enable 配置使能
+ * @param   tx_service_index 发送服务索引
+ * @param   tx_char_index 发送特征索引
+ * @param   rx_service_index 接收服务索引
+ * @param   rx_char_index 接收特征索引
+ * @param   auto_conn 自动连接
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_set_sppcfg(uint16_t cfg_enable, uint16_t tx_service_index, uint16_t tx_char_index, uint16_t rx_service_index, uint16_t rx_char_index, uint16_t auto_conn)
 {
     uint8_t ret;
@@ -366,6 +472,11 @@ uint8_t atk_mb026_set_sppcfg(uint16_t cfg_enable, uint16_t tx_service_index, uin
     return ATK_MB026_EOK;
 }
 
+/**
+ * @brief   ATK-MB026进入Bluetooth LE SPP模式
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_lespp(void)
 {
     uint8_t ret;
@@ -381,6 +492,10 @@ uint8_t atk_mb026_lespp(void)
     }
 }
 
+/**
+ * @brief   获取ATK-MB026连接状态
+ * @return  连接状态
+ */
 atk_mb026_conn_sta_t atk_mb026_get_conn_sta(void)
 {
     uint8_t *recv_len;
@@ -404,6 +519,12 @@ atk_mb026_conn_sta_t atk_mb026_get_conn_sta(void)
     return ATK_MB026_DATA;
 }
 
+/**
+ * @brief   设置ATK-MB026工作模式
+ * @param   mode 模式（1: Station模式，2: SoftAP模式，3: SoftAP+Station模式）
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_set_mode(uint8_t mode)
 {
     uint8_t ret;
@@ -433,6 +554,11 @@ uint8_t atk_mb026_set_mode(uint8_t mode)
     }
 }
 
+/**
+ * @brief   ATK-MB026软件复位
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_sw_reset(void)
 {
     uint8_t ret;
@@ -449,6 +575,12 @@ uint8_t atk_mb026_sw_reset(void)
     }
 }
 
+/**
+ * @brief   ATK-MB026设置回显模式
+ * @param   cfg 配置（0: 关闭，1: 开启）
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_ate_config(uint8_t cfg)
 {
     uint8_t ret;
@@ -475,6 +607,13 @@ uint8_t atk_mb026_ate_config(uint8_t cfg)
     }
 }
 
+/**
+ * @brief   ATK-MB026连接WIFI
+ * @param   ssid WIFI名称
+ * @param   pwd WIFI密码
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_join_ap(char *ssid, char *pwd)
 {
     uint8_t ret;
@@ -493,6 +632,12 @@ uint8_t atk_mb026_join_ap(char *ssid, char *pwd)
     }
 }
 
+/**
+ * @brief   ATK-MB026获取IP地址
+ * @param   buf 存储IP地址的缓冲区
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_get_ip(char *buf)
 {
     uint8_t ret;
@@ -513,6 +658,13 @@ uint8_t atk_mb026_get_ip(char *buf)
     return ATK_MB026_EOK;
 }
 
+/**
+ * @brief   ATK-MB026连接TCP服务器
+ * @param   server_ip 服务器IP地址
+ * @param   server_port 服务器端口
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_connect_tcp_server(char *server_ip, char *server_port)
 {
     uint8_t ret;
@@ -521,7 +673,8 @@ uint8_t atk_mb026_connect_tcp_server(char *server_ip, char *server_port)
     // 设置为单连接模式，透传模式必须在单连接下工作
     printf("[DEBUG] 设置单连接模式...\r\n");
     ret = atk_mb026_send_at_cmd("AT+CIPMUX=0", "OK", 1000);
-    if (ret != ATK_MB026_EOK) {
+    if (ret != ATK_MB026_EOK)
+    {
         printf("[ERROR] 设置单连接模式失败! 错误码: %d\r\n", ret);
         return ATK_MB026_ERROR;
     }
@@ -539,21 +692,27 @@ uint8_t atk_mb026_connect_tcp_server(char *server_ip, char *server_port)
     }
 }
 
-
+/**
+ * @brief   ATK-MB026进入透传模式
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_enter_unvarnished(void)
 {
     uint8_t ret1, ret2;
     uint8_t retry_count = 0;
     const uint8_t max_retries = 3;
 
-    /* 重试机制 */
-    while (retry_count < max_retries) {
+    // 重试机制
+    while (retry_count < max_retries)
+    {
         printf("[DEBUG] 尝试进入透传模式 (第%d次)...\r\n", retry_count + 1);
         
-        /* 先检查连接状态 */
+        // 先检查连接状态
         printf("[DEBUG] 检查连接状态...\r\n");
         ret1 = atk_mb026_send_at_cmd("AT+CIPSTATUS", "STATUS:3", 1000);
-        if (ret1 != ATK_MB026_EOK) {
+        if (ret1 != ATK_MB026_EOK)
+        {
             printf("[WARNING] 连接状态检查失败，错误码: %d\r\n", ret1);
             delay_ms(1000);
             retry_count++;
@@ -561,10 +720,11 @@ uint8_t atk_mb026_enter_unvarnished(void)
         }
         printf("[SUCCESS] 连接状态正常\r\n");
         
-        /* 发送AT+CIPMODE=1指令 */
+        // 发送AT+CIPMODE=1指令
         printf("[DEBUG] 发送AT+CIPMODE=1指令...\r\n");
         ret1 = atk_mb026_send_at_cmd("AT+CIPMODE=1", "OK", 1000);
-        if (ret1 != ATK_MB026_EOK) {
+        if (ret1 != ATK_MB026_EOK)
+        {
             printf("[ERROR] AT+CIPMODE=1指令失败! 错误码: %d\r\n", ret1);
             delay_ms(1000);
             retry_count++;
@@ -572,13 +732,14 @@ uint8_t atk_mb026_enter_unvarnished(void)
         }
         printf("[SUCCESS] AT+CIPMODE=1指令成功\r\n");
         
-        /* 等待一段时间确保模式切换完成 */
+        // 等待一段时间确保模式切换完成
         delay_ms(500);
         
-        /* 发送AT+CIPSEND指令 */
+        // 发送AT+CIPSEND指令
         printf("[DEBUG] 发送AT+CIPSEND指令...\r\n");
         ret2 = atk_mb026_send_at_cmd("AT+CIPSEND", ">", 1000);
-        if (ret2 != ATK_MB026_EOK) {
+        if (ret2 != ATK_MB026_EOK)
+        {
             printf("[ERROR] AT+CIPSEND指令失败! 错误码: %d\r\n", ret2);
             delay_ms(1000);
             retry_count++;
@@ -593,11 +754,21 @@ uint8_t atk_mb026_enter_unvarnished(void)
     return ATK_MB026_ERROR;
 }
 
+/**
+ * @brief   ATK-MB026退出透传模式
+ */
 void atk_mb026_exit_unvarnished(void)
 {
     atk_mb026_uart_printf("+++");
 }
 
+/**
+ * @brief   ATK-MB026连接原子云服务器
+ * @param   id 设备ID
+ * @param   pwd 设备密码
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_connect_atkcld(char *id, char *pwd)
 {
     uint8_t ret;
@@ -615,6 +786,13 @@ uint8_t atk_mb026_connect_atkcld(char *id, char *pwd)
     }
 }
 
+/**
+ * @brief   ATK-MB026连接新版原子云服务器
+ * @param   id 设备ID
+ * @param   pwd 设备密码
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_connect_atknewcld(char *id, char *pwd)
 {
     uint8_t ret;
@@ -632,6 +810,11 @@ uint8_t atk_mb026_connect_atknewcld(char *id, char *pwd)
     }
 }
 
+/**
+ * @brief   ATK-MB026断开原子云服务器连接
+ * @return  ATK_MB026_EOK: 成功
+ *          其他: 失败
+ */
 uint8_t atk_mb026_disconnect_atkcld(void)
 {
     uint8_t ret;
@@ -646,6 +829,3 @@ uint8_t atk_mb026_disconnect_atkcld(void)
         return ATK_MB026_ERROR;
     }
 }
-
-
-

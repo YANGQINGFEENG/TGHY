@@ -1,3 +1,13 @@
+/**
+ * @file    main.c
+ * @brief   智能农业监控系统主程序
+ * @details 实现WiFi连接、服务器通信、传感器数据采集、设备控制等功能
+ * @author  Smart Agriculture Team
+ * @date    2026-04-11
+ * @version 1.0.0
+ * @note    基于STM32F103C8微控制器开发
+ */
+
 #include "stm32f10x.h"                  // Device header
 #include "Delay.h"
 #include "LED.h"
@@ -16,23 +26,31 @@
 #include "../Hardware/ServerComm.h"
 #include <stdio.h>
 
-// 全局变量
-uint32_t timecount = 0;
-uint8_t g_wifi_connected = 0; // WiFi连接状态标志
-uint8_t g_server_connected = 0; // 服务器连接状态标志
+/* ==================== 全局变量定义 ==================== */
 
-// 配置参数
-#define MAX_WIFI_RETRY 5        // WiFi连接最大重试次数
-#define MAX_SERVER_RETRY 3      // 服务器连接最大重试次数
-#define WIFI_CHECK_INTERVAL 10000 // WiFi状态检查间隔(ms)
-#define SERVER_TEST_COUNT 3     // 服务器测试次数
-#define BAIDU_PING_INTERVAL 30000 // 百度Ping测试间隔(ms)
+uint32_t timecount = 0;                  // 系统运行时间计数器（ms）
+uint8_t g_wifi_connected = 0;            // WiFi连接状态标志（0: 未连接, 1: 已连接）
+uint8_t g_server_connected = 0;          // 服务器连接状态标志（0: 未连接, 1: 已连接）
+
+/* ==================== 配置参数定义 ==================== */
+
+#define MAX_WIFI_RETRY 5                 // WiFi连接最大重试次数
+#define MAX_SERVER_RETRY 3               // 服务器连接最大重试次数
+#define WIFI_CHECK_INTERVAL 10000        // WiFi状态检查间隔（ms）
+#define SERVER_TEST_COUNT 3              // 服务器测试次数
+#define BAIDU_PING_INTERVAL 30000        // 百度Ping测试间隔（ms）
 
 // 服务器信息 - 已移至ServerComm.h中定义
 
+/* ==================== WiFi连接功能 ==================== */
+
 /**
- * @brief 检查WiFi连接状态
- * @return 1: WiFi已连接, 0: WiFi未连接
+ * @brief   检查WiFi连接状态
+ * @details 通过AT命令查询WiFi模块的连接状态
+ * @return  WiFi连接状态
+ * @retval  1: WiFi已连接
+ * @retval  0: WiFi未连接
+ * @note    使用AT+CWSTATUS命令查询状态
  */
 uint8_t check_wifi_status(void)
 {
@@ -49,8 +67,12 @@ uint8_t check_wifi_status(void)
 }
 
 /**
- * @brief 初始化WiFi模块
- * @return 1: 成功, 0: 失败
+ * @brief   初始化WiFi模块
+ * @details 初始化ATK-MB026 WiFi模块，设置波特率并检测模块响应
+ * @return  初始化结果
+ * @retval  1: 初始化成功
+ * @retval  0: 初始化失败
+ * @note    波特率设置为115200
  */
 uint8_t init_wifi_module(void)
 {
@@ -73,8 +95,12 @@ uint8_t init_wifi_module(void)
     return ret;
 }
 /**
- * @brief 连接WiFi网络
- * @return 1: 成功, 0: 失败
+ * @brief   连接WiFi网络
+ * @details 使用配置的SSID和密码连接WiFi网络，支持自动重试
+ * @return  连接结果
+ * @retval  1: 连接成功
+ * @retval  0: 连接失败
+ * @note    最大重试次数由MAX_WIFI_RETRY定义
  */
 uint8_t connect_wifi(void)
 {
@@ -111,11 +137,17 @@ uint8_t connect_wifi(void)
     return ret;
 }
 
+/* ==================== 服务器通信功能 ==================== */
+
 /**
- * @brief 发送数据到服务器
- * @param data 要发送的数据
- * @param len 数据长度
- * @return 1: 成功, 0: 失败
+ * @brief   发送数据到服务器
+ * @details 通过TCP连接发送数据到服务器
+ * @param   data 要发送的数据
+ * @param   len 数据长度
+ * @return  发送结果
+ * @retval  1: 发送成功
+ * @retval  0: 发送失败
+ * @note    使用AT+CIPSEND命令发送数据
  */
 uint8_t send_data_to_server(char *data, uint16_t len)
 {
@@ -148,9 +180,12 @@ uint8_t send_data_to_server(char *data, uint16_t len)
 }
 
 /**
- * @brief Ping服务器功能
- * @param server_address 服务器地址
- * @return Ping响应时间(ms)，0表示失败或超时
+ * @brief   Ping服务器功能
+ * @details 使用AT+PING命令测试服务器连通性
+ * @param   server_address 服务器地址
+ * @return  Ping响应时间（ms）
+ * @retval  0: 失败或超时
+ * @note    超时时间设置为15秒
  */
 uint32_t ping_server(const char *server_address)
 {
@@ -189,11 +224,15 @@ uint32_t ping_server(const char *server_address)
 }
 
 /**
- * @brief 发送HTTP请求到服务器
- * @param server_url 服务器地址
- * @param server_port 服务器端口
- * @param request HTTP请求内容
- * @return 1: 成功, 0: 失败
+ * @brief   发送HTTP请求到服务器
+ * @details 建立TCP连接并发送HTTP请求，支持重试机制
+ * @param   server_url 服务器地址
+ * @param   server_port 服务器端口
+ * @param   request HTTP请求内容
+ * @return  发送结果
+ * @retval  1: 发送成功
+ * @retval  0: 发送失败
+ * @note    最大重试次数由MAX_SERVER_RETRY定义
  */
 uint8_t send_http_request(char *server_url, char *server_port, char *request)
 {
@@ -313,8 +352,12 @@ uint8_t send_http_request(char *server_url, char *server_port, char *request)
     return ret;
 }
 
+/* ==================== 测试功能 ==================== */
+
 /**
- * @brief 测试百度连接
+ * @brief   测试百度连接
+ * @details 通过Ping命令测试与百度的网络连通性
+ * @note    仅在WiFi已连接时执行测试
  */
 void test_baidu_connectivity(void)
 {
@@ -355,7 +398,9 @@ void test_baidu_connectivity(void)
 }
 
 /**
- * @brief 测试服务器健康状态
+ * @brief   测试服务器健康状态
+ * @details 发送HTTP GET请求测试服务器响应状态
+ * @note    测试次数由SERVER_TEST_COUNT定义
  */
 void test_server_health(void)
 {
@@ -433,8 +478,12 @@ void test_server_health(void)
     OLED_ShowString(2, 1, result_str);
 }
 
+/* ==================== 主程序 ==================== */
+
 /**
- * @brief 主函数
+ * @brief   主函数
+ * @details 系统初始化、WiFi连接、服务器通信、传感器数据采集和设备控制的主循环
+ * @return  程序退出码（通常不返回）
  */
 int main(void)
 {
@@ -446,8 +495,8 @@ int main(void)
 	RELAY_Init();                // 初始化继电器
 	DHT11_Init();                // 初始化温湿度传感器
 	LightSensor_Init();          // 初始化光照传感器
-//	TOUCH_KEY_Init();            // 初始化触摸按键
-//	TOUCH_KEY_EXTI_Init();       // 初始化触摸按键外部中断
+//	TOUCH_KEY_Init();            // TODO: 初始化触摸按键（暂时禁用）
+//	TOUCH_KEY_EXTI_Init();       // TODO: 初始化触摸按键外部中断（暂时禁用）
 	RS485_Init();                // 初始化RS485通信（包含USART3初始化，波特率4800）
 	
 	// 初始化WiFi模块的串口

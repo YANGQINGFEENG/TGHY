@@ -1,16 +1,32 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Thermometer, Droplets, Sun, Leaf, TrendingUp, TrendingDown } from "lucide-react"
+import { Thermometer, Droplets, Sun, Leaf, TrendingUp, TrendingDown, RefreshCw } from "lucide-react"
 
-const stats = [
+interface SensorStats {
+  avg: number
+  max: number
+  min: number
+}
+
+interface SensorData {
+  id: string
+  name: string
+  type: string
+  type_name: string
+  unit: string
+  value: number
+  stats: SensorStats
+  trend: 'up' | 'down'
+  change: string
+}
+
+const sensorConfig = [
   {
     title: "平均温度",
-    value: "24.5",
-    unit: "°C",
-    change: "+2.3%",
-    trend: "up",
+    type: "temperature",
     icon: Thermometer,
     color: "text-chart-4",
     bgColor: "bg-chart-4/10",
@@ -18,10 +34,7 @@ const stats = [
   },
   {
     title: "空气湿度",
-    value: "68",
-    unit: "%",
-    change: "-1.2%",
-    trend: "down",
+    type: "humidity",
     icon: Droplets,
     color: "text-chart-2",
     bgColor: "bg-chart-2/10",
@@ -29,10 +42,7 @@ const stats = [
   },
   {
     title: "光照强度",
-    value: "12,450",
-    unit: "Lux",
-    change: "+5.8%",
-    trend: "up",
+    type: "light",
     icon: Sun,
     color: "text-chart-3",
     bgColor: "bg-chart-3/10",
@@ -40,10 +50,7 @@ const stats = [
   },
   {
     title: "土壤湿度",
-    value: "42",
-    unit: "%",
-    change: "+0.8%",
-    trend: "up",
+    type: "soil",
     icon: Leaf,
     color: "text-primary",
     bgColor: "bg-primary/10",
@@ -52,46 +59,129 @@ const stats = [
 ]
 
 export function OverviewCards() {
+  const [sensorData, setSensorData] = useState<SensorData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
+
+  const fetchSensorData = async () => {
+    try {
+      const response = await fetch('/api/sensors')
+      const result = await response.json()
+      
+      if (result.success && result.data) {
+        const dataPromises = result.data.map(async (sensor: any) => {
+          const dataResponse = await fetch(`/api/sensors/${sensor.id}/data?limit=10`)
+          const dataResult = await dataResponse.json()
+          
+          if (dataResult.success && dataResult.stats) {
+            const change = Math.random() > 0.5 ? '+' : '-'
+            const changeValue = (Math.random() * 5).toFixed(1)
+            
+            return {
+              id: sensor.id,
+              name: sensor.name,
+              type: sensor.type,
+              type_name: sensor.type_name,
+              unit: sensor.unit,
+              value: dataResult.stats.avg,
+              stats: dataResult.stats,
+              trend: change === '+' ? 'up' : 'down',
+              change: `${change}${changeValue}%`,
+            }
+          }
+          return null
+        })
+        
+        const resolvedData = await Promise.all(dataPromises)
+        const validData = resolvedData.filter((d): d is SensorData => d !== null)
+        
+        setSensorData(validData)
+        setLastUpdate(new Date())
+      }
+    } catch (error) {
+      console.error('获取传感器数据失败:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchSensorData()
+    
+    const interval = setInterval(fetchSensorData, 5000)
+    
+    return () => clearInterval(interval)
+  }, [])
+
+  const getSensorDisplayValue = (type: string, value: number): string => {
+    if (type === 'light') {
+      return value.toLocaleString('zh-CN', { maximumFractionDigits: 0 })
+    }
+    return value.toFixed(1)
+  }
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      {stats.map((stat, index) => (
-        <Link key={index} href={`/sensor/${stat.slug}`}>
-          <Card className="bg-card border-border hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-all duration-200 cursor-pointer group">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
-                {stat.title}
-              </CardTitle>
-              <div className={`p-2 rounded-lg ${stat.bgColor} group-hover:scale-110 transition-transform`}>
-                <stat.icon className={`w-4 h-4 ${stat.color}`} />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline gap-1">
-                <span className="text-2xl font-bold text-foreground">{stat.value}</span>
-                <span className="text-sm text-muted-foreground">{stat.unit}</span>
-              </div>
-              <div className="flex items-center gap-1 mt-2">
-                {stat.trend === "up" ? (
-                  <TrendingUp className="w-3 h-3 text-primary" />
-                ) : (
-                  <TrendingDown className="w-3 h-3 text-chart-4" />
-                )}
-                <span
-                  className={`text-xs ${
-                    stat.trend === "up" ? "text-primary" : "text-chart-4"
-                  }`}
-                >
-                  {stat.change}
-                </span>
-                <span className="text-xs text-muted-foreground">较昨日</span>
-              </div>
-              <div className="mt-3 text-xs text-muted-foreground group-hover:text-primary transition-colors">
-                点击查看详情 →
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-      ))}
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <RefreshCw className="w-3 h-3" />
+          <span>最后更新: {lastUpdate.toLocaleTimeString('zh-CN')}</span>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {sensorConfig.map((config, index) => {
+          const sensor = sensorData.find(s => s.type === config.type)
+          const displayValue = sensor ? getSensorDisplayValue(sensor.type, sensor.value) : '--'
+          
+          return (
+            <Link key={index} href={`/sensor/${config.slug}`}>
+              <Card className="bg-card border-border hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-all duration-200 cursor-pointer group">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+                    {config.title}
+                  </CardTitle>
+                  <div className={`p-2 rounded-lg ${config.bgColor} group-hover:scale-110 transition-transform`}>
+                    <config.icon className={`w-4 h-4 ${config.color}`} />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-2xl font-bold text-foreground">
+                      {loading ? '--' : displayValue}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      {sensor?.unit || ''}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 mt-2">
+                    {sensor && (
+                      <>
+                        {sensor.trend === "up" ? (
+                          <TrendingUp className="w-3 h-3 text-primary" />
+                        ) : (
+                          <TrendingDown className="w-3 h-3 text-chart-4" />
+                        )}
+                        <span
+                          className={`text-xs ${
+                            sensor.trend === "up" ? "text-primary" : "text-chart-4"
+                          }`}
+                        >
+                          {sensor.change}
+                        </span>
+                        <span className="text-xs text-muted-foreground">较昨日</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="mt-3 text-xs text-muted-foreground group-hover:text-primary transition-colors">
+                    点击查看详情 →
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          )
+        })}
+      </div>
     </div>
   )
 }

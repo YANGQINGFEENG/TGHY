@@ -60,6 +60,7 @@ const sensorConfig: Record<string, {
   description: string
   normalRange: string
   warningThreshold: { min: number; max: number }
+  sensorIds: string[]
 }> = {
   temperature: {
     title: "温度传感器",
@@ -71,6 +72,7 @@ const sensorConfig: Record<string, {
     description: "监测环境温度变化，适用于温室大棚、养殖场等场景",
     normalRange: "18°C - 28°C",
     warningThreshold: { min: 15, max: 32 },
+    sensorIds: ["T-001", "T-002", "T-003"],
   },
   humidity: {
     title: "空气湿度传感器",
@@ -82,6 +84,7 @@ const sensorConfig: Record<string, {
     description: "监测空气相对湿度，对作物生长和病虫害防治至关重要",
     normalRange: "60% - 80%",
     warningThreshold: { min: 40, max: 90 },
+    sensorIds: ["H-001", "H-002"],
   },
   light: {
     title: "光照传感器",
@@ -93,6 +96,7 @@ const sensorConfig: Record<string, {
     description: "监测光照强度，帮助调节补光灯和遮阳设施",
     normalRange: "8,000 - 15,000 Lux",
     warningThreshold: { min: 5000, max: 20000 },
+    sensorIds: ["L-001", "L-002"],
   },
   soil: {
     title: "土壤湿度传感器",
@@ -104,39 +108,31 @@ const sensorConfig: Record<string, {
     description: "监测土壤含水量，精准灌溉节约水资源",
     normalRange: "35% - 55%",
     warningThreshold: { min: 25, max: 65 },
+    sensorIds: ["S-001", "S-002", "S-003"],
   },
 }
 
-// Generate mock data
-function generateHourlyData(baseValue: number, variance: number) {
-  return Array.from({ length: 24 }, (_, i) => ({
-    time: `${i.toString().padStart(2, "0")}:00`,
-    value: Math.round((baseValue + (Math.random() - 0.5) * variance) * 10) / 10,
-  }))
+interface SensorDataPoint {
+  id: number
+  sensor_id: string
+  value: number
+  timestamp: string
 }
 
-function generateWeeklyData(baseValue: number, variance: number) {
-  const days = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
-  return days.map((day) => ({
-    day,
-    avg: Math.round((baseValue + (Math.random() - 0.5) * variance) * 10) / 10,
-    max: Math.round((baseValue + variance / 2 + Math.random() * variance / 2) * 10) / 10,
-    min: Math.round((baseValue - variance / 2 - Math.random() * variance / 2) * 10) / 10,
-  }))
+interface SensorInfo {
+  id: string
+  name: string
+  type: string
+  type_name: string
+  unit: string
+  status: string
+  location: string
 }
 
-function generateSensorList(type: string) {
-  const zones = ["A区温室", "B区温室", "C区大棚", "D区露天"]
-  return zones.flatMap((zone, zoneIdx) =>
-    Array.from({ length: 3 }, (_, i) => ({
-      id: `${type.toUpperCase()}-${zoneIdx + 1}${i + 1}`,
-      name: `${zone} ${i + 1}号`,
-      status: Math.random() > 0.1 ? "online" : "offline",
-      value: Math.round((20 + Math.random() * 20) * 10) / 10,
-      lastUpdate: `${Math.floor(Math.random() * 10) + 1}分钟前`,
-      battery: Math.floor(60 + Math.random() * 40),
-    }))
-  )
+interface SensorWithStatus extends SensorInfo {
+  currentValue: number
+  lastUpdate: string
+  battery: number
 }
 
 export default function SensorDetailPage({
@@ -147,17 +143,99 @@ export default function SensorDetailPage({
   const { type } = use(params)
   const config = sensorConfig[type]
   const [timeRange, setTimeRange] = useState("24h")
-  const [currentTime, setCurrentTime] = useState("")
   const [mounted, setMounted] = useState(false)
-  
+  const [hourlyData, setHourlyData] = useState<{ time: string; value: number }[]>([])
+  const [weeklyData, setWeeklyData] = useState<{ day: string; avg: number; max: number; min: number }[]>([])
+  const [sensorList, setSensorList] = useState<SensorWithStatus[]>([])
+  const [stats, setStats] = useState({ current: 0, avg: 0, max: 0, min: 0 })
+  const [loading, setLoading] = useState(true)
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
+
+  const formatTime = (timestamp: string): string => {
+    const date = new Date(timestamp)
+    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  const fetchData = async () => {
+    if (!config) return
+
+    try {
+      const sensorId = config.sensorIds[0]
+      const dataResponse = await fetch(`/api/sensors/${sensorId}/data?limit=24`)
+      const dataResult = await dataResponse.json()
+
+      if (dataResult.success && dataResult.data) {
+        const formattedData = dataResult.data
+          .reverse()
+          .map((item: SensorDataPoint) => ({
+            time: formatTime(item.timestamp),
+            value: Number(item.value),
+          }))
+        setHourlyData(formattedData)
+
+        if (dataResult.stats) {
+          setStats({
+            current: Number(dataResult.data[dataResult.data.length - 1]?.value) || 0,
+            avg: dataResult.stats.avg || 0,
+            max: dataResult.stats.max || 0,
+            min: dataResult.stats.min || 0,
+          })
+        }
+      }
+
+      const sensorsResponse = await fetch('/api/sensors')
+      const sensorsResult = await sensorsResponse.json()
+
+      if (sensorsResult.success && sensorsResult.data) {
+        const typeSensors = sensorsResult.data.filter((s: SensorInfo) => s.type === type)
+        
+        const sensorsWithStatus = await Promise.all(
+          typeSensors.map(async (sensor: SensorInfo) => {
+            const sensorDataResponse = await fetch(`/api/sensors/${sensor.id}/data?limit=1`)
+            const sensorDataResult = await sensorDataResponse.json()
+            
+            const latestData = sensorDataResult.data?.[0]
+            
+            return {
+              ...sensor,
+              currentValue: latestData ? Number(latestData.value) : 0,
+              lastUpdate: latestData 
+                ? new Date(latestData.timestamp).toLocaleString('zh-CN')
+                : '暂无数据',
+              battery: Math.floor(60 + Math.random() * 40),
+              status: Math.random() > 0.1 ? 'online' : 'offline',
+            }
+          })
+        )
+        
+        setSensorList(sensorsWithStatus)
+      }
+
+      const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+      const mockWeeklyData = days.map((day) => ({
+        day,
+        avg: stats.avg + (Math.random() - 0.5) * 5,
+        max: stats.max + Math.random() * 3,
+        min: stats.min - Math.random() * 3,
+      }))
+      setWeeklyData(mockWeeklyData)
+
+      setLastUpdate(new Date())
+    } catch (error) {
+      console.error('获取数据失败:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     setMounted(true)
-    setCurrentTime(new Date().toLocaleString("zh-CN"))
-    const interval = setInterval(() => {
-      setCurrentTime(new Date().toLocaleString("zh-CN"))
-    }, 1000)
+    fetchData()
+
+    const interval = setInterval(fetchData, 5000)
+
     return () => clearInterval(interval)
-  }, [])
+  }, [type])
 
   if (!config) {
     return (
@@ -173,23 +251,9 @@ export default function SensorDetailPage({
   }
 
   const Icon = config.icon
-  const hourlyData = generateHourlyData(
-    type === "temperature" ? 24 : type === "humidity" ? 68 : type === "light" ? 12000 : 42,
-    type === "temperature" ? 8 : type === "humidity" ? 15 : type === "light" ? 5000 : 10
-  )
-  const weeklyData = generateWeeklyData(
-    type === "temperature" ? 24 : type === "humidity" ? 68 : type === "light" ? 12000 : 42,
-    type === "temperature" ? 6 : type === "humidity" ? 12 : type === "light" ? 4000 : 8
-  )
-  const sensorList = generateSensorList(type)
-  const currentValue = hourlyData[hourlyData.length - 1]?.value || 0
-  const avgValue = Math.round((hourlyData.reduce((a, b) => a + b.value, 0) / hourlyData.length) * 10) / 10
-  const maxValue = Math.max(...hourlyData.map((d) => d.value))
-  const minValue = Math.min(...hourlyData.map((d) => d.value))
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="h-full px-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -207,6 +271,10 @@ export default function SensorDetailPage({
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <RefreshCw className="w-3 h-3" />
+              <span>最后更新: {lastUpdate.toLocaleTimeString('zh-CN')}</span>
+            </div>
             <Select value={timeRange} onValueChange={setTimeRange}>
               <SelectTrigger className="w-[120px] bg-secondary border-border">
                 <SelectValue />
@@ -217,7 +285,7 @@ export default function SensorDetailPage({
                 <SelectItem value="30d">30天</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" size="icon" className="bg-secondary border-border">
+            <Button variant="outline" size="icon" className="bg-secondary border-border" onClick={fetchData}>
               <RefreshCw className="w-4 h-4" />
             </Button>
             <ThemeToggle />
@@ -230,21 +298,30 @@ export default function SensorDetailPage({
       </header>
 
       <main className="p-6">
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <Card className="bg-card border-border">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">当前值</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-baseline gap-1">
-                <span className={`text-3xl font-bold ${config.color}`}>{currentValue}</span>
-                <span className="text-sm text-muted-foreground">{config.unit}</span>
-              </div>
-              <Badge variant="secondary" className="mt-2 bg-primary/10 text-primary">
-                <Activity className="w-3 h-3 mr-1" />
-                实时
-              </Badge>
+              {loading ? (
+                <div className="flex items-center justify-center h-16">
+                  <Spinner className="text-primary" />
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-baseline gap-1">
+                    <span className={`text-3xl font-bold ${config.color}`}>
+                      {type === 'light' ? stats.current.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) : stats.current.toFixed(1)}
+                    </span>
+                    <span className="text-sm text-muted-foreground">{config.unit}</span>
+                  </div>
+                  <Badge variant="secondary" className="mt-2 bg-primary/10 text-primary">
+                    <Activity className="w-3 h-3 mr-1" />
+                    实时
+                  </Badge>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -253,11 +330,21 @@ export default function SensorDetailPage({
               <CardTitle className="text-sm font-medium text-muted-foreground">平均值</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-baseline gap-1">
-                <span className="text-3xl font-bold text-foreground">{avgValue}</span>
-                <span className="text-sm text-muted-foreground">{config.unit}</span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">过去24小时</p>
+              {loading ? (
+                <div className="flex items-center justify-center h-16">
+                  <Spinner className="text-primary" />
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-bold text-foreground">
+                      {type === 'light' ? stats.avg.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) : stats.avg.toFixed(1)}
+                    </span>
+                    <span className="text-sm text-muted-foreground">{config.unit}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">过去24小时</p>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -266,12 +353,22 @@ export default function SensorDetailPage({
               <CardTitle className="text-sm font-medium text-muted-foreground">最高值</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-baseline gap-1">
-                <TrendingUp className="w-5 h-5 text-chart-4 mr-1" />
-                <span className="text-3xl font-bold text-chart-4">{maxValue}</span>
-                <span className="text-sm text-muted-foreground">{config.unit}</span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">过去24小时</p>
+              {loading ? (
+                <div className="flex items-center justify-center h-16">
+                  <Spinner className="text-primary" />
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-baseline gap-1">
+                    <TrendingUp className="w-5 h-5 text-chart-4 mr-1" />
+                    <span className="text-3xl font-bold text-chart-4">
+                      {type === 'light' ? stats.max.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) : stats.max.toFixed(1)}
+                    </span>
+                    <span className="text-sm text-muted-foreground">{config.unit}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">过去24小时</p>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -280,17 +377,26 @@ export default function SensorDetailPage({
               <CardTitle className="text-sm font-medium text-muted-foreground">最低值</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-baseline gap-1">
-                <TrendingDown className="w-5 h-5 text-chart-2 mr-1" />
-                <span className="text-3xl font-bold text-chart-2">{minValue}</span>
-                <span className="text-sm text-muted-foreground">{config.unit}</span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">过去24小时</p>
+              {loading ? (
+                <div className="flex items-center justify-center h-16">
+                  <Spinner className="text-primary" />
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-baseline gap-1">
+                    <TrendingDown className="w-5 h-5 text-chart-2 mr-1" />
+                    <span className="text-3xl font-bold text-chart-2">
+                      {type === 'light' ? stats.min.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) : stats.min.toFixed(1)}
+                    </span>
+                    <span className="text-sm text-muted-foreground">{config.unit}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">过去24小时</p>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Charts and Details */}
         <Tabs defaultValue="trend" className="space-y-4">
           <TabsList className="bg-secondary">
             <TabsTrigger value="trend">趋势图</TabsTrigger>
@@ -305,7 +411,11 @@ export default function SensorDetailPage({
                 <CardDescription>显示{config.title}在过去24小时内的数据变化</CardDescription>
               </CardHeader>
               <CardContent>
-                {mounted ? (
+                {loading || !mounted ? (
+                  <div className="h-[350px] flex items-center justify-center">
+                    <Spinner className="text-primary" />
+                  </div>
+                ) : hourlyData.length > 0 ? (
                   <ChartContainer
                     config={{
                       value: { label: config.title, color: config.chartColor },
@@ -342,8 +452,8 @@ export default function SensorDetailPage({
                     </AreaChart>
                   </ChartContainer>
                 ) : (
-                  <div className="h-[350px] flex items-center justify-center">
-                    <Spinner className="text-primary" />
+                  <div className="h-[350px] flex items-center justify-center text-muted-foreground">
+                    暂无数据
                   </div>
                 )}
               </CardContent>
@@ -404,11 +514,13 @@ export default function SensorDetailPage({
                     </div>
                     <div className="p-4 rounded-lg bg-chart-2/10 text-center">
                       <p className="text-3xl font-bold text-chart-2">
-                        {Math.round(
-                          (sensorList.filter((s) => s.status === "online").length /
-                            sensorList.length) *
-                            100
-                        )}
+                        {sensorList.length > 0
+                          ? Math.round(
+                              (sensorList.filter((s) => s.status === "online").length /
+                                sensorList.length) *
+                                100
+                            )
+                          : 0}
                         %
                       </p>
                       <p className="text-sm text-muted-foreground mt-1">在线率</p>
@@ -426,7 +538,11 @@ export default function SensorDetailPage({
                 <CardDescription>显示本周每天的平均值、最高值和最低值对比</CardDescription>
               </CardHeader>
               <CardContent>
-                {mounted ? (
+                {loading || !mounted ? (
+                  <div className="h-[400px] flex items-center justify-center">
+                    <Spinner className="text-primary" />
+                  </div>
+                ) : (
                   <ChartContainer
                     config={{
                       min: { label: "最低值", color: "var(--chart-2)" },
@@ -452,10 +568,6 @@ export default function SensorDetailPage({
                       <Bar dataKey="max" fill="var(--chart-4)" name="最高值" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ChartContainer>
-                ) : (
-                  <div className="h-[400px] flex items-center justify-center">
-                    <Spinner className="text-primary" />
-                  </div>
                 )}
               </CardContent>
             </Card>
@@ -468,71 +580,79 @@ export default function SensorDetailPage({
                 <CardDescription>所有{config.title}的详细信息和状态</CardDescription>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-border">
-                      <TableHead className="text-muted-foreground">设备ID</TableHead>
-                      <TableHead className="text-muted-foreground">位置</TableHead>
-                      <TableHead className="text-muted-foreground">状态</TableHead>
-                      <TableHead className="text-muted-foreground">当前值</TableHead>
-                      <TableHead className="text-muted-foreground">电量</TableHead>
-                      <TableHead className="text-muted-foreground">最后更新</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sensorList.map((sensor) => (
-                      <TableRow key={sensor.id} className="border-border">
-                        <TableCell className="font-mono text-foreground">{sensor.id}</TableCell>
-                        <TableCell className="text-foreground">{sensor.name}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={sensor.status === "online" ? "default" : "destructive"}
-                            className={
-                              sensor.status === "online"
-                                ? "bg-primary/20 text-primary hover:bg-primary/30"
-                                : ""
-                            }
-                          >
-                            {sensor.status === "online" ? "在线" : "离线"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-foreground">
-                          {sensor.value} {config.unit}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="w-16 h-2 rounded-full bg-secondary overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${
-                                  sensor.battery > 60
-                                    ? "bg-primary"
-                                    : sensor.battery > 30
-                                    ? "bg-chart-3"
-                                    : "bg-chart-4"
-                                }`}
-                                style={{ width: `${sensor.battery}%` }}
-                              />
-                            </div>
-                            <span className="text-xs text-muted-foreground">{sensor.battery}%</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{sensor.lastUpdate}</TableCell>
+                {loading ? (
+                  <div className="flex items-center justify-center h-32">
+                    <Spinner className="text-primary" />
+                  </div>
+                ) : sensorList.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-border">
+                        <TableHead className="text-muted-foreground">设备ID</TableHead>
+                        <TableHead className="text-muted-foreground">名称</TableHead>
+                        <TableHead className="text-muted-foreground">状态</TableHead>
+                        <TableHead className="text-muted-foreground">当前值</TableHead>
+                        <TableHead className="text-muted-foreground">电量</TableHead>
+                        <TableHead className="text-muted-foreground">最后更新</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {sensorList.map((sensor) => (
+                        <TableRow key={sensor.id} className="border-border">
+                          <TableCell className="font-mono text-foreground">{sensor.id}</TableCell>
+                          <TableCell className="text-foreground">{sensor.name}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="secondary"
+                              className={
+                                sensor.status === "online"
+                                  ? "bg-primary/10 text-primary"
+                                  : "bg-chart-4/10 text-chart-4"
+                              }
+                            >
+                              {sensor.status === "online" ? "在线" : "离线"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-foreground">
+                            {type === 'light' 
+                              ? sensor.currentValue.toLocaleString('zh-CN', { maximumFractionDigits: 0 })
+                              : sensor.currentValue.toFixed(1)
+                            } {config.unit}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="w-16 h-2 bg-secondary rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full ${
+                                    sensor.battery > 50
+                                      ? "bg-primary"
+                                      : sensor.battery > 20
+                                      ? "bg-chart-3"
+                                      : "bg-chart-4"
+                                  }`}
+                                  style={{ width: `${sensor.battery}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-muted-foreground">{sensor.battery}%</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {sensor.lastUpdate}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="flex items-center justify-center h-32 text-muted-foreground">
+                    暂无传感器数据
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       </main>
-
-      {/* Footer */}
-      <footer className="h-12 border-t border-border bg-card/50 flex items-center justify-center">
-        <p className="text-xs text-muted-foreground">
-          智慧农业物联网监控平台 v1.0.0 | 数据更新时间: {currentTime || "--"}
-        </p>
-      </footer>
     </div>
   )
 }

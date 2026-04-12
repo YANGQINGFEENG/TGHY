@@ -1,11 +1,26 @@
+/**
+ * @file    LightSensor.c
+ * @brief   光照传感器驱动
+ * @details 基于ADC的光照传感器驱动，实现光照强度的读取和转换
+ * @author  Smart Agriculture Team
+ * @date    2026-04-11
+ * @version 1.0.0
+ * @note    使用ADC1通道5（PA5）读取光照传感器模拟值
+ */
+
 #include "stm32f10x.h"
 
-// 光照传感器引脚定义
-#define LIGHT_SENSOR_PORT GPIOA
-#define LIGHT_SENSOR_PIN GPIO_Pin_5
+/* ==================== 宏定义 ==================== */
+
+#define LIGHT_SENSOR_PORT GPIOA            // 光照传感器端口
+#define LIGHT_SENSOR_PIN GPIO_Pin_5        // 光照传感器引脚（PA5）
+
+/* ==================== 函数实现 ==================== */
 
 /**
- * @brief ADC初始化
+ * @brief   ADC初始化
+ * @details 配置ADC1通道5为模拟输入模式，并进行ADC校准
+ * @note    ADC配置为独立模式、单次转换、右对齐
  */
 void LightSensor_Init(void)
 {
@@ -40,8 +55,10 @@ void LightSensor_Init(void)
 }
 
 /**
- * @brief 读取光照传感器值
- * @return 光照值（0-4095）
+ * @brief   读取光照传感器值
+ * @details 启动ADC转换并等待转换完成
+ * @return  光照值（0-4095）
+ * @note    ADC分辨率为12位，采样时间为55.5周期
  */
 uint16_t LightSensor_Read(void)
 {
@@ -59,8 +76,9 @@ uint16_t LightSensor_Read(void)
 }
 
 /**
- * @brief 获取光照强度百分比
- * @return 光照强度（0-100%）
+ * @brief   获取光照强度百分比
+ * @details 将ADC值（0-4095）映射到百分比（0-100%）
+ * @return  光照强度（0-100%）
  */
 uint8_t LightSensor_GetPercentage(void)
 {

@@ -1,61 +1,95 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { db, RowDataPacket, ResultSetHeader } from '@/lib/db'
 
-// 模拟数据库连接和操作
-const mockDatabase = {
-  sensorTypes: [
-    { id: 1, type: 'temperature', name: '温度传感器', unit: '°C' },
-    { id: 2, type: 'humidity', name: '空气湿度传感器', unit: '%' },
-    { id: 3, type: 'light', name: '光照传感器', unit: 'Lux' },
-    { id: 4, type: 'soil', name: '土壤湿度传感器', unit: '%' },
-  ],
+/**
+ * 传感器类型数据接口
+ */
+interface SensorType extends RowDataPacket {
+  id: number
+  type: string
+  name: string
+  unit: string
+  created_at: Date
 }
 
-// GET /api/sensor-types - 获取所有传感器类型
+/**
+ * GET /api/sensor-types
+ * 获取所有传感器类型
+ */
 export async function GET() {
-  return NextResponse.json({
-    success: true,
-    data: mockDatabase.sensorTypes,
-    total: mockDatabase.sensorTypes.length,
-  })
+  try {
+    const rows = await db.query<SensorType[]>(
+      'SELECT id, type, name, unit, created_at FROM sensor_types ORDER BY id'
+    )
+
+    return NextResponse.json({
+      success: true,
+      data: rows,
+      total: rows.length,
+    })
+  } catch (error) {
+    console.error('获取传感器类型失败:', error)
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: '获取传感器类型失败',
+        details: error instanceof Error ? error.message : '未知错误'
+      },
+      { status: 500 }
+    )
+  }
 }
 
-// POST /api/sensor-types - 新增传感器类型
+/**
+ * POST /api/sensor-types
+ * 新增传感器类型
+ */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     
-    // 验证请求数据
     if (!body.type || !body.name || !body.unit) {
       return NextResponse.json(
-        { success: false, error: '缺少必要参数' },
+        { success: false, error: '缺少必要参数：type, name, unit' },
         { status: 400 }
       )
     }
-    
-    // 检查类型是否已存在
-    if (mockDatabase.sensorTypes.find(t => t.type === body.type)) {
+
+    const existingTypes = await db.query<SensorType[]>(
+      'SELECT id FROM sensor_types WHERE type = ?',
+      [body.type]
+    )
+
+    if (existingTypes.length > 0) {
       return NextResponse.json(
         { success: false, error: '传感器类型已存在' },
         { status: 400 }
       )
     }
-    
-    const newType = {
-      id: mockDatabase.sensorTypes.length + 1,
-      type: body.type,
-      name: body.name,
-      unit: body.unit,
-    }
-    
-    mockDatabase.sensorTypes.push(newType)
-    
+
+    const result = await db.execute<ResultSetHeader>(
+      'INSERT INTO sensor_types (type, name, unit) VALUES (?, ?, ?)',
+      [body.type, body.name, body.unit]
+    )
+
+    const newTypes = await db.query<SensorType[]>(
+      'SELECT id, type, name, unit, created_at FROM sensor_types WHERE id = ?',
+      [result.insertId]
+    )
+
     return NextResponse.json({
       success: true,
-      data: newType,
+      data: newTypes[0],
+      message: '传感器类型创建成功',
     })
   } catch (error) {
+    console.error('创建传感器类型失败:', error)
     return NextResponse.json(
-      { success: false, error: '服务器内部错误' },
+      { 
+        success: false, 
+        error: '创建传感器类型失败',
+        details: error instanceof Error ? error.message : '未知错误'
+      },
       { status: 500 }
     )
   }
