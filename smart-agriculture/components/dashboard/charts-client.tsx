@@ -89,7 +89,7 @@ export function ChartsClient() {
   useEffect(() => {
     fetchChartData()
     
-    const interval = setInterval(fetchChartData, 5000)
+    const interval = setInterval(fetchChartData, 10000) // 优化：降低更新频率到10秒
     
     return () => clearInterval(interval)
   }, [])
