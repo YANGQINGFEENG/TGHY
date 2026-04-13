@@ -89,29 +89,34 @@ export function OverviewCards() {
 
   const fetchSensorData = async () => {
     try {
+      setLoading(true)
       const response = await fetch('/api/sensors')
       const result = await response.json()
       
       if (result.success && result.data) {
         const dataPromises = result.data.map(async (sensor: any) => {
-          const dataResponse = await fetch(`/api/sensors/${sensor.id}/data?limit=10`)
-          const dataResult = await dataResponse.json()
-          
-          if (dataResult.success && dataResult.stats) {
-            const change = Math.random() > 0.5 ? '+' : '-'
-            const changeValue = (Math.random() * 5).toFixed(1)
+          try {
+            const dataResponse = await fetch(`/api/sensors/${sensor.id}/data?limit=10`)
+            const dataResult = await dataResponse.json()
             
-            return {
-              id: sensor.id,
-              name: sensor.name,
-              type: sensor.type,
-              type_name: sensor.type_name,
-              unit: sensor.unit,
-              value: dataResult.stats.avg,
-              stats: dataResult.stats,
-              trend: change === '+' ? 'up' : 'down',
-              change: `${change}${changeValue}%`,
+            if (dataResult.success && dataResult.stats) {
+              const change = Math.random() > 0.5 ? '+' : '-'
+              const changeValue = (Math.random() * 5).toFixed(1)
+              
+              return {
+                id: sensor.id,
+                name: sensor.name,
+                type: sensor.type,
+                type_name: sensor.type_name,
+                unit: sensor.unit,
+                value: dataResult.stats.avg,
+                stats: dataResult.stats,
+                trend: change === '+' ? 'up' : 'down',
+                change: `${change}${changeValue}%`,
+              }
             }
+          } catch (error) {
+            console.error(`获取传感器 ${sensor.id} 数据失败:`, error)
           }
           return null
         })
@@ -121,6 +126,8 @@ export function OverviewCards() {
         
         setSensorData(validData)
         setLastUpdate(new Date())
+      } else {
+        console.error('获取传感器列表失败:', result.error)
       }
     } catch (error) {
       console.error('获取传感器数据失败:', error)
@@ -132,7 +139,7 @@ export function OverviewCards() {
   useEffect(() => {
     fetchSensorData()
     
-    const interval = setInterval(fetchSensorData, 2000)
+    const interval = setInterval(fetchSensorData, 10000) // 优化：降低更新频率到10秒
     
     return () => clearInterval(interval)
   }, [])
